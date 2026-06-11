@@ -1,0 +1,13 @@
+# build output
+/bin/
+*.exe
+
+# local env / secrets (config comes from the environment)
+.env
+.env.*
+
+# go
+*.test
+*.out
+
+CLAUDE.md

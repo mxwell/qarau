@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package qarau.v1;
+
+option go_package = "github.com/mxwell/qarau/gen/qarau/v1;qarauv1";
+
+// JobType mirrors the Postgres `job_type` enum.
+enum JobType {
+  JOB_TYPE_UNSPECIFIED = 0;
+  JOB_TYPE_FETCH = 1;
+  JOB_TYPE_ASR = 2;
+}
+
+// JobState mirrors the Postgres `job_state` enum.
+enum JobState {
+  JOB_STATE_UNSPECIFIED = 0;
+  JOB_STATE_PENDING = 1;
+  JOB_STATE_RUNNING = 2;
+  JOB_STATE_DONE = 3;
+  JOB_STATE_FAILED = 4;
+}
