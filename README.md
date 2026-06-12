@@ -25,3 +25,13 @@ make build                 # binaries in ./bin
 | `gen/`      | Generated protobuf + gRPC Go code (committed).       |
 | `db/`       | Migrations, sqlc queries, generated DB code.         |
 | `internal/` | Shared, non-public Go packages.                      |
+
+## Chores
+
+```sh
+# clean ~/go/pkg/mod
+go clean -modcache
+
+# clean ~/.cache/go-build
+go clean -cache
+```

@@ -2,6 +2,13 @@ MODULE    := github.com/mxwell/qarau
 PROTO_DIR := proto
 GEN_DIR   := gen
 
+# go install drops binaries (protoc-gen-go, protoc-gen-go-grpc, sqlc, goose)
+# into $GOBIN/$GOPATH/bin, which is not always on the shell PATH. Add it so
+# protoc and friends can find the plugins.
+GOBIN     := $(shell go env GOBIN)
+GOPATH    := $(shell go env GOPATH)
+export PATH := $(if $(GOBIN),$(GOBIN),$(GOPATH)/bin):$(PATH)
+
 .PHONY: tools proto sqlc migrate-up migrate-down build run-api run-fetch run-asr test lint tidy
 
 ## tools: install codegen tooling (protoc plugins, sqlc, goose)
