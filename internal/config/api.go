@@ -1,0 +1,79 @@
+package config
+
+import (
+	"errors"
+	"fmt"
+	"log/slog"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/spf13/viper"
+)
+
+type APIConfig struct {
+	GRPCPort    uint16
+	RESTPort    uint16
+	GracePeriod time.Duration
+	DBUrl       string
+	LogLevel    slog.Level
+}
+
+func parseLogLevel(s string) (slog.Level, error) {
+	switch strings.ToUpper(s) {
+	case slog.LevelDebug.String():
+		return slog.LevelDebug, nil
+	case slog.LevelInfo.String():
+		return slog.LevelInfo, nil
+	case slog.LevelWarn.String():
+		return slog.LevelWarn, nil
+	case slog.LevelError.String():
+		return slog.LevelError, nil
+	}
+	return slog.LevelInfo, fmt.Errorf("unknown log level '%v'", s)
+}
+
+func LoadAPI() (APIConfig, error) {
+	v := viper.New()
+
+	v.SetConfigFile(".env")
+	v.SetEnvPrefix("QARAU")
+	v.AutomaticEnv()
+
+	// Defaults
+	v.SetDefault("GRPC_PORT", 7991)
+	v.SetDefault("REST_PORT", 7992)
+	v.SetDefault("GRACE_PERIOD", "3s")
+	v.SetDefault("LOG_LEVEL", "INFO")
+
+	if err := v.ReadInConfig(); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return APIConfig{}, fmt.Errorf("api config error: %w", err)
+	}
+
+	logLevel, err := parseLogLevel(v.GetString("LOG_LEVEL"))
+	if err != nil {
+		return APIConfig{}, fmt.Errorf("api config error: %w", err)
+	}
+
+	cfg := APIConfig{
+		GRPCPort:    v.GetUint16("GRPC_PORT"),
+		RESTPort:    v.GetUint16("REST_PORT"),
+		GracePeriod: v.GetDuration("GRACE_PERIOD"),
+		DBUrl:       v.GetString("DB_URL"),
+		LogLevel:    logLevel,
+	}
+
+	if cfg.GRPCPort < 1024 {
+		return cfg, fmt.Errorf("api config error: invalid GRPC port %d", cfg.GRPCPort)
+	}
+	if cfg.RESTPort < 1024 {
+		return cfg, fmt.Errorf("api config error: invalid REST port %d", cfg.RESTPort)
+	}
+	if cfg.GracePeriod == 0 {
+		return cfg, errors.New("api config error: invalid grace period")
+	}
+	if !strings.HasPrefix(cfg.DBUrl, "postgres://") {
+		return cfg, fmt.Errorf("api config error: invalid DB URL %v", cfg.DBUrl)
+	}
+	return cfg, nil
+}

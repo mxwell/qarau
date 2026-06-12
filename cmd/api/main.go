@@ -12,23 +12,36 @@ import (
 
 	qarauv1 "github.com/mxwell/qarau/gen/qarau/v1"
 	"github.com/mxwell/qarau/internal/api"
+	"github.com/mxwell/qarau/internal/config"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 )
 
-func run(logger *slog.Logger) error {
+func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// TODO: load config (internal/config), connect to Postgres (db)
-
-	port := 9001
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	cfg, err := config.LoadAPI()
 	if err != nil {
-		logger.Error("failed to listen", "port", port, "err", err)
+		fmt.Printf("failed to load API config: %v\n", err.Error())
 		return err
 	}
-	logger.Info("listening", "port", port)
+
+	logOptions := slog.HandlerOptions{
+		Level: cfg.LogLevel,
+	}
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &logOptions))
+	logger.Info("api starting")
+
+	// TODO: connect to Postgres (db)
+
+	address := fmt.Sprintf(":%d", cfg.GRPCPort)
+	lis, err := net.Listen("tcp", address)
+	if err != nil {
+		logger.Error("failed to listen", "address", address, "err", err)
+		return err
+	}
+	logger.Info("listening grpc", "port", cfg.GRPCPort)
 
 	var opts []grpc.ServerOption
 	grpcServer := grpc.NewServer(opts...)
@@ -43,12 +56,11 @@ func run(logger *slog.Logger) error {
 			grpcServer.GracefulStop()
 			close(done)
 		}()
-		delay := 3 * time.Second
 		select {
 		case <-done:
 			logger.Info("graceful stop finished ok")
-		case <-time.After(delay):
-			logger.Warn("force stop after delay", "delay", delay)
+		case <-time.After(cfg.GracePeriod):
+			logger.Warn("force stop after delay", "grace_period", cfg.GracePeriod)
 			grpcServer.Stop()
 		}
 		return nil
@@ -69,11 +81,8 @@ func run(logger *slog.Logger) error {
 }
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	logger.Info("api starting")
-
-	if err := run(logger); err != nil {
-		logger.Error("run failed", "err", err)
+	if err := run(); err != nil {
+		fmt.Printf("run failed: %v\n", err.Error())
 		os.Exit(1)
 	}
 }
