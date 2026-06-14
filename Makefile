@@ -41,6 +41,12 @@ migrate-down:
 build:
 	go build -o bin/ ./cmd/...
 
+run_pg_dev:
+	docker run --rm --name postgres_dev -e POSTGRES_PASSWORD=admin -e POSTGRES_DB=qaraudb -p 5432:5432 -v postgres-data:/var/lib/postgresql -d postgres:18-bookworm
+
+run_pg_client:
+	psql -h localhost -p 5432 -U postgres -d qaraudb
+
 run-api:
 	go run ./cmd/api
 

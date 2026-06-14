@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	qarauv1 "github.com/mxwell/qarau/gen/qarau/v1"
 	"github.com/mxwell/qarau/internal/api"
 	"github.com/mxwell/qarau/internal/config"
@@ -33,7 +34,18 @@ func run() error {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &logOptions))
 	logger.Info("api starting")
 
-	// TODO: connect to Postgres (db)
+	db, err := pgxpool.New(ctx, cfg.DBUrl)
+	if err != nil {
+		logger.Error("failed to connect to database", "err", err)
+		return err
+	}
+	defer db.Close()
+
+	if err := db.Ping(ctx); err != nil {
+		logger.Error("failed to ping database", "err", err)
+		return err
+	}
+	logger.Info("connected to db")
 
 	address := fmt.Sprintf(":%d", cfg.GRPCPort)
 	lis, err := net.Listen("tcp", address)
