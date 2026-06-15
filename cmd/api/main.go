@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	dbgen "github.com/mxwell/qarau/db/gen"
 	qarauv1 "github.com/mxwell/qarau/gen/qarau/v1"
 	"github.com/mxwell/qarau/internal/api"
 	"github.com/mxwell/qarau/internal/config"
@@ -57,7 +58,13 @@ func run() error {
 
 	var opts []grpc.ServerOption
 	grpcServer := grpc.NewServer(opts...)
-	qarauv1.RegisterJobServiceServer(grpcServer, api.NewServer(logger))
+
+	queries := dbgen.New(db)
+	jobService := api.NewService(logger, queries)
+	qarauv1.RegisterJobServiceServer(
+		grpcServer,
+		api.NewServer(logger, jobService),
+	)
 
 	group, groupCtx := errgroup.WithContext(ctx)
 
