@@ -21,56 +21,6 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// JobType mirrors the Postgres `job_type` enum.
-type JobType int32
-
-const (
-	JobType_JOB_TYPE_UNSPECIFIED JobType = 0
-	JobType_JOB_TYPE_FETCH       JobType = 1
-	JobType_JOB_TYPE_ASR         JobType = 2
-)
-
-// Enum value maps for JobType.
-var (
-	JobType_name = map[int32]string{
-		0: "JOB_TYPE_UNSPECIFIED",
-		1: "JOB_TYPE_FETCH",
-		2: "JOB_TYPE_ASR",
-	}
-	JobType_value = map[string]int32{
-		"JOB_TYPE_UNSPECIFIED": 0,
-		"JOB_TYPE_FETCH":       1,
-		"JOB_TYPE_ASR":         2,
-	}
-)
-
-func (x JobType) Enum() *JobType {
-	p := new(JobType)
-	*p = x
-	return p
-}
-
-func (x JobType) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (JobType) Descriptor() protoreflect.EnumDescriptor {
-	return file_qarau_v1_common_proto_enumTypes[0].Descriptor()
-}
-
-func (JobType) Type() protoreflect.EnumType {
-	return &file_qarau_v1_common_proto_enumTypes[0]
-}
-
-func (x JobType) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use JobType.Descriptor instead.
-func (JobType) EnumDescriptor() ([]byte, []int) {
-	return file_qarau_v1_common_proto_rawDescGZIP(), []int{0}
-}
-
 // JobState mirrors the Postgres `job_state` enum.
 type JobState int32
 
@@ -111,11 +61,11 @@ func (x JobState) String() string {
 }
 
 func (JobState) Descriptor() protoreflect.EnumDescriptor {
-	return file_qarau_v1_common_proto_enumTypes[1].Descriptor()
+	return file_qarau_v1_common_proto_enumTypes[0].Descriptor()
 }
 
 func (JobState) Type() protoreflect.EnumType {
-	return &file_qarau_v1_common_proto_enumTypes[1]
+	return &file_qarau_v1_common_proto_enumTypes[0]
 }
 
 func (x JobState) Number() protoreflect.EnumNumber {
@@ -124,18 +74,14 @@ func (x JobState) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use JobState.Descriptor instead.
 func (JobState) EnumDescriptor() ([]byte, []int) {
-	return file_qarau_v1_common_proto_rawDescGZIP(), []int{1}
+	return file_qarau_v1_common_proto_rawDescGZIP(), []int{0}
 }
 
 var File_qarau_v1_common_proto protoreflect.FileDescriptor
 
 const file_qarau_v1_common_proto_rawDesc = "" +
 	"\n" +
-	"\x15qarau/v1/common.proto\x12\bqarau.v1*I\n" +
-	"\aJobType\x12\x18\n" +
-	"\x14JOB_TYPE_UNSPECIFIED\x10\x00\x12\x12\n" +
-	"\x0eJOB_TYPE_FETCH\x10\x01\x12\x10\n" +
-	"\fJOB_TYPE_ASR\x10\x02*}\n" +
+	"\x15qarau/v1/common.proto\x12\bqarau.v1*}\n" +
 	"\bJobState\x12\x19\n" +
 	"\x15JOB_STATE_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11JOB_STATE_PENDING\x10\x01\x12\x15\n" +
@@ -155,10 +101,9 @@ func file_qarau_v1_common_proto_rawDescGZIP() []byte {
 	return file_qarau_v1_common_proto_rawDescData
 }
 
-var file_qarau_v1_common_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_qarau_v1_common_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_qarau_v1_common_proto_goTypes = []any{
-	(JobType)(0),  // 0: qarau.v1.JobType
-	(JobState)(0), // 1: qarau.v1.JobState
+	(JobState)(0), // 0: qarau.v1.JobState
 }
 var file_qarau_v1_common_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -178,7 +123,7 @@ func file_qarau_v1_common_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_qarau_v1_common_proto_rawDesc), len(file_qarau_v1_common_proto_rawDesc)),
-			NumEnums:      2,
+			NumEnums:      1,
 			NumMessages:   0,
 			NumExtensions: 0,
 			NumServices:   0,

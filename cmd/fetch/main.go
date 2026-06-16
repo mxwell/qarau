@@ -1,14 +1,72 @@
 package main
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
+	"syscall"
+
+	qarauv1 "github.com/mxwell/qarau/gen/qarau/v1"
+	"github.com/mxwell/qarau/internal/config"
+	"github.com/mxwell/qarau/internal/fetch"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
-func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	logger.Info("fetch worker starting")
+func run() error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
-	// TODO: dial api over gRPC, run the worker poll loop (internal/worker),
-	// lease fetch jobs, download audio, stream it back via CompleteJob.
+	cfg, err := config.LoadFetch()
+	if err != nil {
+		fmt.Printf("failed to load fetch config: %v\n", err.Error())
+		return err
+	}
+
+	logOptions := slog.HandlerOptions{
+		Level: cfg.LogLevel,
+	}
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &logOptions))
+	logger.Info("fetch starting")
+
+	dialOptions := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}
+
+	target := fmt.Sprintf("%v:%v", cfg.APIHost, cfg.APIPort)
+	conn, err := grpc.NewClient(target, dialOptions...)
+	if err != nil {
+		logger.Error("failed to create gRPC connection", "err", err)
+		return err
+	}
+	defer conn.Close()
+	logger.Info("created gRPC connection", "target", target)
+
+	client := qarauv1.NewJobServiceClient(conn)
+
+	worker := fetch.NewFetchWorker(
+		client,
+		logger,
+		cfg.WorkerId,
+	)
+	if worker == nil {
+		return errors.New("failed to create worker")
+	}
+
+	if err := worker.Loop(ctx); err != nil {
+		logger.Error("worker loop failed", "err", err)
+		return err
+	}
+
+	return nil
+}
+
+func main() {
+	if err := run(); err != nil {
+		fmt.Printf("run failed: %v\n", err.Error())
+		os.Exit(1)
+	}
 }

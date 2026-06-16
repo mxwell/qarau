@@ -4,8 +4,9 @@ package qarau.v1;
 
 option go_package = "github.com/mxwell/qarau/gen/qarau/v1;qarauv1";
 
-import "qarau/v1/common.proto";
 import "qarau/v1/job_payload.proto";
+import "qarau/v1/job_type.proto";
+import "qarau/v1/lease_job_request.proto";
 
 // JobService is the worker-facing API. The fetch and asr workers are gRPC
 // clients of api; they poll for work and report results here. Only api touches
@@ -33,11 +34,6 @@ message Job {
   int64 video_id = 2;
   JobType type = 3;
   JobPayload payload = 4;
-}
-
-message LeaseJobRequest {
-  JobType type = 1;
-  string worker_id = 2; // worker instance id, e.g. "asr-pod-abc"
 }
 
 message LeaseJobResponse {

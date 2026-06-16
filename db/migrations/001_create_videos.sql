@@ -1,3 +1,4 @@
+-- +goose Up
 -- Videos table: metadata for source videos
 CREATE TABLE videos (
     -- Identity
@@ -23,3 +24,6 @@ CREATE TABLE videos (
     -- Timestamps
     created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- +goose Down
+DROP TABLE videos;

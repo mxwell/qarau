@@ -5,6 +5,7 @@
 # local env / secrets (config comes from the environment)
 .env
 .env.*
+.fetch.env
 
 # go
 *.test

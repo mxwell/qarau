@@ -1,3 +1,4 @@
+-- +goose Up
 -- Enumerations
 CREATE TYPE job_type AS ENUM ('fetch', 'asr');
 CREATE TYPE job_state AS ENUM ('pending', 'running', 'done', 'failed');
@@ -36,3 +37,9 @@ CREATE TABLE jobs (
 CREATE INDEX idx_jobs_claimable
     ON jobs (type, created_at)
     WHERE state IN ('pending', 'running');
+
+-- +goose Down
+DROP INDEX IF EXISTS idx_jobs_claimable;
+DROP TABLE jobs;
+DROP TYPE job_state;
+DROP TYPE job_type;

@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package qarau.v1;
+
+option go_package = "github.com/mxwell/qarau/gen/qarau/v1;qarauv1";
+
+import "qarau/v1/job_type.proto";
+
+message LeaseJobRequest {
+    JobType type = 1;
+    string worker_id = 2; // worker instance id, e.g. "asr-pod-abc"
+}
