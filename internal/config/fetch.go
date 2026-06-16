@@ -45,14 +45,14 @@ func LoadFetch() (FetchConfig, error) {
 	}
 
 	if !strings.HasPrefix(cfg.WorkerId, "fetch_") {
-		return cfg, fmt.Errorf("fetch config error: worker ID should start with fetch_ - '%v'", cfg.WorkerId)
+		return FetchConfig{}, fmt.Errorf("fetch config error: worker ID should start with fetch_ - '%v'", cfg.WorkerId)
 	}
 
 	if len(cfg.APIHost) == 0 {
-		return cfg, errors.New("fetch config error: empty API host")
+		return FetchConfig{}, errors.New("fetch config error: empty API host")
 	}
 	if cfg.APIPort < 1024 {
-		return cfg, fmt.Errorf("fetch config error: invalid API port %d", cfg.APIPort)
+		return FetchConfig{}, fmt.Errorf("fetch config error: invalid API port %d", cfg.APIPort)
 	}
 
 	return cfg, nil

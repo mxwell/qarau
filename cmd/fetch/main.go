@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
@@ -22,7 +22,7 @@ func run() error {
 
 	cfg, err := config.LoadFetch()
 	if err != nil {
-		fmt.Printf("failed to load fetch config: %v\n", err.Error())
+		fmt.Fprintf(os.Stderr, "failed to load fetch config: %v\n", err)
 		return err
 	}
 
@@ -36,7 +36,7 @@ func run() error {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	}
 
-	target := fmt.Sprintf("%v:%v", cfg.APIHost, cfg.APIPort)
+	target := net.JoinHostPort(cfg.APIHost, fmt.Sprint(cfg.APIPort))
 	conn, err := grpc.NewClient(target, dialOptions...)
 	if err != nil {
 		logger.Error("failed to create gRPC connection", "err", err)
@@ -47,13 +47,13 @@ func run() error {
 
 	client := qarauv1.NewJobServiceClient(conn)
 
-	worker := fetch.NewFetchWorker(
+	worker, err := fetch.NewFetchWorker(
 		client,
 		logger,
 		cfg.WorkerId,
 	)
-	if worker == nil {
-		return errors.New("failed to create worker")
+	if err != nil {
+		return err
 	}
 
 	if err := worker.Loop(ctx); err != nil {
@@ -66,7 +66,7 @@ func run() error {
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Printf("run failed: %v\n", err.Error())
+		fmt.Fprintf(os.Stderr, "run failed: %v\n", err)
 		os.Exit(1)
 	}
 }
