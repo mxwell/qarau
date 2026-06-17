@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -61,7 +62,7 @@ func LoadFetch() (FetchConfig, error) {
 	if len(cfg.Tool) == 0 {
 		return FetchConfig{}, errors.New("fetch config error: empty tool")
 	}
-	if !strings.HasPrefix(cfg.WorkingDir, "/") {
+	if !filepath.IsAbs(cfg.WorkingDir) {
 		return FetchConfig{}, fmt.Errorf("fetch config error: invalid working dir '%v'", cfg.WorkingDir)
 	}
 

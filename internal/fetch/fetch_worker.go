@@ -20,23 +20,23 @@ const (
 type FetchWorker struct {
 	client     qarauv1.JobServiceClient
 	logger     *slog.Logger
-	workerId   string
+	workerID   string
 	downloader Downloader
 }
 
 type claimedJob struct {
-	jobId         int64
+	jobID         int64
 	onlineVideoId string
 }
 
-func NewFetchWorker(client qarauv1.JobServiceClient, logger *slog.Logger, workerId string, downloader Downloader) (*FetchWorker, error) {
+func NewFetchWorker(client qarauv1.JobServiceClient, logger *slog.Logger, workerID string, downloader Downloader) (*FetchWorker, error) {
 	if client == nil {
 		return nil, errors.New("nil client in FetchWorker creation")
 	}
 	if logger == nil {
 		return nil, errors.New("nil logger in FetchWorker creation")
 	}
-	if len(workerId) == 0 {
+	if len(workerID) == 0 {
 		return nil, errors.New("empty worker ID in FetchWorker creation")
 	}
 	if downloader == nil {
@@ -45,12 +45,12 @@ func NewFetchWorker(client qarauv1.JobServiceClient, logger *slog.Logger, worker
 	return &FetchWorker{
 		client:     client,
 		logger:     logger,
-		workerId:   workerId,
+		workerID:   workerID,
 		downloader: downloader,
 	}, nil
 }
 
-func (fw FetchWorker) claimJob(ctx context.Context, request *qarauv1.LeaseJobRequest) (LoopAction, claimedJob) {
+func (fw *FetchWorker) claimJob(ctx context.Context, request *qarauv1.LeaseJobRequest) (LoopAction, claimedJob) {
 	fw.logger.Info("trying to claim job")
 	response, err := fw.client.LeaseJob(ctx, request)
 	if err != nil {
@@ -76,14 +76,22 @@ func (fw FetchWorker) claimJob(ctx context.Context, request *qarauv1.LeaseJobReq
 		return BackoffOnError, claimedJob{}
 	}
 	return FetchVideo, claimedJob{
-		jobId:         job.Id,
+		jobID:         job.Id,
 		onlineVideoId: onlineVideoId,
 	}
 }
 
-func (fw FetchWorker) fetchAudio(ctx context.Context, job claimedJob) error {
-	audioPath, err := fw.downloader.Download(ctx, job.jobId, job.onlineVideoId)
+func (fw *FetchWorker) fetchAudio(ctx context.Context, job claimedJob) error {
+	audioPath, cleanup, err := fw.downloader.Download(ctx, job.jobID, job.onlineVideoId)
+	defer func() {
+		if cleanup != nil {
+			cleanup()
+		}
+	}()
 	if err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		fw.logger.Error("download failed", "err", err)
 		// TODO report fail to API
 		return nil // the error doesn't show up in the main loop as it's business as usual
@@ -102,10 +110,10 @@ func sleep(ctx context.Context, period time.Duration) error {
 	}
 }
 
-func (fw FetchWorker) Loop(ctx context.Context) error {
+func (fw *FetchWorker) Loop(ctx context.Context) error {
 	request := qarauv1.LeaseJobRequest{
 		Type:     qarauv1.JobType_JOB_TYPE_FETCH,
-		WorkerId: fw.workerId,
+		WorkerId: fw.workerID,
 	}
 
 	initialBackOffPeriod := time.Minute
@@ -134,7 +142,7 @@ func (fw FetchWorker) Loop(ctx context.Context) error {
 			continue
 		default:
 		}
-		fw.logger.Info("claimed fetch job", "id", job.jobId, "onlineVideoId", job.onlineVideoId)
+		fw.logger.Info("claimed fetch job", "id", job.jobID, "onlineVideoId", job.onlineVideoId)
 		if err := fw.fetchAudio(ctx, job); err != nil {
 			return err
 		}
