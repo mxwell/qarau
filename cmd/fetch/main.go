@@ -47,10 +47,13 @@ func run() error {
 
 	client := qarauv1.NewJobServiceClient(conn)
 
+	downloader := fetch.NewYtDlpDownloader(logger, cfg.Tool, cfg.WorkingDir)
+
 	worker, err := fetch.NewFetchWorker(
 		client,
 		logger,
 		cfg.WorkerId,
+		downloader,
 	)
 	if err != nil {
 		return err

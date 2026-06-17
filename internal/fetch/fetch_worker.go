@@ -18,12 +18,18 @@ const (
 )
 
 type FetchWorker struct {
-	client   qarauv1.JobServiceClient
-	logger   *slog.Logger
-	workerId string
+	client     qarauv1.JobServiceClient
+	logger     *slog.Logger
+	workerId   string
+	downloader Downloader
 }
 
-func NewFetchWorker(client qarauv1.JobServiceClient, logger *slog.Logger, workerId string) (*FetchWorker, error) {
+type claimedJob struct {
+	jobId         int64
+	onlineVideoId string
+}
+
+func NewFetchWorker(client qarauv1.JobServiceClient, logger *slog.Logger, workerId string, downloader Downloader) (*FetchWorker, error) {
 	if client == nil {
 		return nil, errors.New("nil client in FetchWorker creation")
 	}
@@ -33,48 +39,57 @@ func NewFetchWorker(client qarauv1.JobServiceClient, logger *slog.Logger, worker
 	if len(workerId) == 0 {
 		return nil, errors.New("empty worker ID in FetchWorker creation")
 	}
+	if downloader == nil {
+		return nil, errors.New("nil downloader in FetchWorker creation")
+	}
 	return &FetchWorker{
-		client:   client,
-		logger:   logger,
-		workerId: workerId,
+		client:     client,
+		logger:     logger,
+		workerId:   workerId,
+		downloader: downloader,
 	}, nil
 }
 
-func (fw FetchWorker) claimJob(ctx context.Context, request *qarauv1.LeaseJobRequest) (LoopAction, string) {
+func (fw FetchWorker) claimJob(ctx context.Context, request *qarauv1.LeaseJobRequest) (LoopAction, claimedJob) {
 	fw.logger.Info("trying to claim job")
 	response, err := fw.client.LeaseJob(ctx, request)
 	if err != nil {
 		fw.logger.Error("lease request failed", "err", err)
-		return BackoffOnError, ""
+		return BackoffOnError, claimedJob{}
 	}
 	job := response.Job
 	if job == nil {
-		return WaitNoJob, ""
+		return WaitNoJob, claimedJob{}
 	}
 	if job.Type != request.Type {
 		fw.logger.Error("claimed job has wrong type", "type", job.Type, "video_id", job.VideoId)
-		return BackoffOnError, ""
+		return BackoffOnError, claimedJob{}
 	}
 	fetchJob := job.Payload.GetFetchJob()
 	if fetchJob == nil {
 		fw.logger.Error("no fetch job in response", "type", job.Type)
-		return BackoffOnError, ""
+		return BackoffOnError, claimedJob{}
 	}
 	onlineVideoId := fetchJob.OnlineVideoId
 	if len(onlineVideoId) == 0 {
 		fw.logger.Error("empty OnlineVideoId", "video_id", job.VideoId)
-		return BackoffOnError, ""
+		return BackoffOnError, claimedJob{}
 	}
-	return FetchVideo, onlineVideoId
+	return FetchVideo, claimedJob{
+		jobId:         job.Id,
+		onlineVideoId: onlineVideoId,
+	}
 }
 
-func (fw FetchWorker) fetchAudio(ctx context.Context, onlineVideoId string) error {
-	fw.logger.Info("fetching audio not implemented", "onlineVideoId", onlineVideoId)
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-time.After(30 * time.Second):
+func (fw FetchWorker) fetchAudio(ctx context.Context, job claimedJob) error {
+	audioPath, err := fw.downloader.Download(ctx, job.jobId, job.onlineVideoId)
+	if err != nil {
+		fw.logger.Error("download failed", "err", err)
+		// TODO report fail to API
+		return nil // the error doesn't show up in the main loop as it's business as usual
 	}
+	fw.logger.Info("downloaded audio", "path", audioPath)
+	// TODO stream audio to API
 	return nil
 }
 
@@ -100,7 +115,7 @@ func (fw FetchWorker) Loop(ctx context.Context) error {
 	pollPeriod := 30 * time.Second
 
 	for {
-		action, onlineVideoId := fw.claimJob(ctx, &request)
+		action, job := fw.claimJob(ctx, &request)
 		switch action {
 		case WaitNoJob:
 			period := max(pollPeriod, 5*time.Second)
@@ -119,9 +134,8 @@ func (fw FetchWorker) Loop(ctx context.Context) error {
 			continue
 		default:
 		}
-		fw.logger.Info("claimed fetch job", "onlineVideoId", onlineVideoId)
-		// TODO: download audio, stream it back via CompleteJob
-		if err := fw.fetchAudio(ctx, onlineVideoId); err != nil {
+		fw.logger.Info("claimed fetch job", "id", job.jobId, "onlineVideoId", job.onlineVideoId)
+		if err := fw.fetchAudio(ctx, job); err != nil {
 			return err
 		}
 	}

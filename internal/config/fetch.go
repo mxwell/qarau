@@ -11,10 +11,12 @@ import (
 )
 
 type FetchConfig struct {
-	WorkerId string
-	APIHost  string
-	APIPort  uint16
-	LogLevel slog.Level
+	WorkerId   string
+	APIHost    string
+	APIPort    uint16
+	Tool       string
+	WorkingDir string
+	LogLevel   slog.Level
 }
 
 func LoadFetch() (FetchConfig, error) {
@@ -38,10 +40,12 @@ func LoadFetch() (FetchConfig, error) {
 	}
 
 	cfg := FetchConfig{
-		WorkerId: v.GetString("WORKER_ID"),
-		APIHost:  v.GetString("API_HOST"),
-		APIPort:  v.GetUint16("API_PORT"),
-		LogLevel: logLevel,
+		WorkerId:   v.GetString("WORKER_ID"),
+		APIHost:    v.GetString("API_HOST"),
+		APIPort:    v.GetUint16("API_PORT"),
+		Tool:       v.GetString("TOOL"),
+		WorkingDir: v.GetString("WORKING_DIR"),
+		LogLevel:   logLevel,
 	}
 
 	if !strings.HasPrefix(cfg.WorkerId, "fetch_") {
@@ -53,6 +57,12 @@ func LoadFetch() (FetchConfig, error) {
 	}
 	if cfg.APIPort < 1024 {
 		return FetchConfig{}, fmt.Errorf("fetch config error: invalid API port %d", cfg.APIPort)
+	}
+	if len(cfg.Tool) == 0 {
+		return FetchConfig{}, errors.New("fetch config error: empty tool")
+	}
+	if !strings.HasPrefix(cfg.WorkingDir, "/") {
+		return FetchConfig{}, fmt.Errorf("fetch config error: invalid working dir '%v'", cfg.WorkingDir)
 	}
 
 	return cfg, nil
