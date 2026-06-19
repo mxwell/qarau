@@ -10,6 +10,9 @@ import (
 
 type Querier interface {
 	ClaimJob(ctx context.Context, arg ClaimJobParams) (ClaimJobRow, error)
+	CreateAsrJob(ctx context.Context, fetchJobID int64) (int64, error)
+	CreateAudioBlob(ctx context.Context, arg CreateAudioBlobParams) (int64, error)
+	MarkJobDone(ctx context.Context, arg MarkJobDoneParams) (int64, error)
 }
 
 var _ Querier = (*Queries)(nil)

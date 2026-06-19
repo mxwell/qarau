@@ -17,3 +17,24 @@ WHERE id = (
     ORDER BY created_at LIMIT 1 FOR UPDATE SKIP LOCKED
 )
 RETURNING id, video_id, online_video_id;
+
+-- name: MarkJobDone :one
+UPDATE jobs SET
+    state = 'done',
+    finished_at = now()
+WHERE
+    id = sqlc.arg('job_id') AND
+    type = sqlc.arg('job_type') AND
+    state = 'running' AND
+    locked_by = sqlc.arg('locked_by')
+RETURNING id;
+
+-- name: CreateAsrJob :one
+INSERT INTO jobs (
+    video_id,
+    type,
+    online_video_id
+) SELECT video_id, 'asr', online_video_id
+FROM jobs AS nested_jobs
+WHERE nested_jobs.id = sqlc.arg('fetch_job_id') AND nested_jobs.type = 'fetch'
+RETURNING id;

@@ -35,3 +35,12 @@ go clean -modcache
 # clean ~/.cache/go-build
 go clean -cache
 ```
+
+## Extract audio_blob
+
+```
+psql -h localhost -p 5432 -U postgres -d qaraudb < extract_audio_blog.sql | xxd -r -p | tail -c +2 > f8Adt8gBxBw.webm
+# password prompt here
+```
+
+There is an extra byte at the start, that is removed by `tail`. The cause is not clear.

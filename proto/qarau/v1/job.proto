@@ -4,6 +4,8 @@ package qarau.v1;
 
 option go_package = "github.com/mxwell/qarau/gen/qarau/v1;qarauv1";
 
+import "qarau/v1/complete_fetch_request.proto";
+import "qarau/v1/complete_fetch_response.proto";
 import "qarau/v1/job_payload.proto";
 import "qarau/v1/job_type.proto";
 import "qarau/v1/lease_job_request.proto";
@@ -18,9 +20,7 @@ service JobService {
   // Heartbeat extends a lease while a worker is still processing a job.
   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
 
-  // CompleteJob marks a job done. Client-streaming so the fetch worker can
-  // upload audio bytes after an initial metadata message.
-  rpc CompleteJob(stream CompleteJobRequest) returns (CompleteJobResponse);
+  rpc CompleteFetch(stream CompleteFetchRequest) returns (CompleteFetchResponse);
 
   // FailJob records a failure; api decides whether the job is retried.
   rpc FailJob(FailJobRequest) returns (FailJobResponse);
@@ -49,23 +49,6 @@ message HeartbeatRequest {
 message HeartbeatResponse {
   bool still_leased = 1; // false if the lease was lost (expired and reclaimed)
 }
-
-message CompleteJobRequest {
-  oneof msg {
-    CompleteJobMeta meta = 1; // must be the first message
-    bytes audio_chunk = 2;    // fetch only: subsequent audio bytes
-  }
-}
-
-message CompleteJobMeta {
-  int64 job_id = 1;
-  string worker_id = 2;
-  bytes result = 3;      // small JSON result (duration, metadata, transcript ref, …)
-  string media_type = 4; // fetch only, e.g. "audio/ogg"
-  int32 duration_ms = 5; // fetch only
-}
-
-message CompleteJobResponse {}
 
 message FailJobRequest {
   int64 job_id = 1;

@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package qarau.v1;
+
+option go_package = "github.com/mxwell/qarau/gen/qarau/v1;qarauv1";
+
+message CompleteFetchRequest {
+    oneof msg {
+        CompleteFetchMeta meta = 1;  // meta should arrive before any chunks
+        CompleteFetchChunk chunk = 2;
+    }
+}
+
+message CompleteFetchMeta {
+    int64 job_id = 1;
+    string filename = 2;
+    int64 length = 3;
+    string worker_id = 4;  // TODO should be signed and passed through auth header
+}
+
+message CompleteFetchChunk {
+    int64 offset = 1;
+    bytes content = 2;
+    uint32 crc32 = 3;
+}

@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package qarau.v1;
+
+option go_package = "github.com/mxwell/qarau/gen/qarau/v1;qarauv1";
+
+message CompleteFetchResponse {
+    bool ok = 1;
+    string error_message = 2;
+}

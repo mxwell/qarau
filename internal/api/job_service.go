@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 	dbgen "github.com/mxwell/qarau/db/gen"
 	qarauv1 "github.com/mxwell/qarau/gen/qarau/v1"
 )
@@ -16,19 +17,24 @@ import (
 type JobService struct {
 	log     *slog.Logger
 	queries *dbgen.Queries
+	pool    *pgxpool.Pool
 }
 
-func NewService(log *slog.Logger, queries *dbgen.Queries) *JobService {
+func NewService(log *slog.Logger, queries *dbgen.Queries, pool *pgxpool.Pool) (*JobService, error) {
 	if log == nil {
-		panic("api: NewService requires a non-nil logger")
+		return nil, errors.New("nil logger in JobService creation")
 	}
 	if queries == nil {
-		panic("api: NewService requires non-nil queries")
+		return nil, errors.New("nil queries in JobService creation")
+	}
+	if pool == nil {
+		return nil, errors.New("nil pool in JobService creation")
 	}
 	return &JobService{
 		log:     log,
 		queries: queries,
-	}
+		pool:    pool,
+	}, nil
 }
 
 func convertJobType(protoJobType qarauv1.JobType) (dbgen.JobType, error) {
@@ -42,7 +48,7 @@ func convertJobType(protoJobType qarauv1.JobType) (dbgen.JobType, error) {
 	}
 }
 
-func prepareJobPayload(jobType qarauv1.JobType, row dbgen.ClaimJobRow) *qarauv1.JobPayload {
+func prepareJobPayload(jobType qarauv1.JobType, row dbgen.ClaimJobRow) (*qarauv1.JobPayload, error) {
 	if jobType == qarauv1.JobType_JOB_TYPE_FETCH {
 		return &qarauv1.JobPayload{
 			Payload: &qarauv1.JobPayload_FetchJob{
@@ -50,12 +56,13 @@ func prepareJobPayload(jobType qarauv1.JobType, row dbgen.ClaimJobRow) *qarauv1.
 					OnlineVideoId: row.OnlineVideoID,
 				},
 			},
-		}
+		}, nil
 	}
-	panic("job types other than fetch are not supported")
+	// TODO support ASR jobs
+	return nil, fmt.Errorf("payload for job type %v not supported", jobType)
 }
 
-func (s JobService) LeaseJob(ctx context.Context, request *qarauv1.LeaseJobRequest) (*qarauv1.LeaseJobResponse, error) {
+func (s *JobService) LeaseJob(ctx context.Context, request *qarauv1.LeaseJobRequest) (*qarauv1.LeaseJobResponse, error) {
 	if len(request.WorkerId) == 0 {
 		return nil, errors.New("empty worker ID")
 	}
@@ -91,13 +98,56 @@ func (s JobService) LeaseJob(ctx context.Context, request *qarauv1.LeaseJobReque
 		}
 		return nil, err
 	}
+	payload, err := prepareJobPayload(request.Type, row)
+	if err != nil {
+		return nil, err
+	}
 
 	return &qarauv1.LeaseJobResponse{
 		Job: &qarauv1.Job{
 			Id:      row.ID,
 			VideoId: row.VideoID,
 			Type:    request.Type,
-			Payload: prepareJobPayload(request.Type, row),
+			Payload: payload,
 		},
 	}, nil
+}
+
+/*
+ * The method does 3 things under 1 transaction: creates a new audio blob, marks the fetch job done and creates a new ASR job
+ */
+func (s *JobService) CompleteFetchJob(ctx context.Context, workerID string, jobID int64, audio []byte, filename string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx) // safe even after tx.Commit() -- does nothing
+
+	qtx := s.queries.WithTx(tx)
+
+	_, err = qtx.CreateAudioBlob(ctx, dbgen.CreateAudioBlobParams{
+		JobID:    jobID,
+		Content:  audio,
+		Filename: filename,
+	})
+	if err != nil {
+		s.log.Error("failed to create audio blob", "job", jobID, "err", err)
+		return err
+	}
+	_, err = qtx.MarkJobDone(ctx, dbgen.MarkJobDoneParams{
+		JobID:    jobID,
+		JobType:  dbgen.JobTypeFetch,
+		LockedBy: &workerID,
+	})
+	if err != nil {
+		s.log.Error("failed to mark fetch job done", "job", jobID, "err", err)
+		return err
+	}
+	_, err = qtx.CreateAsrJob(ctx, jobID)
+	if err != nil {
+		s.log.Error("failed to create ASR job", "job", jobID, "err", err)
+		return err
+	}
+
+	return tx.Commit(ctx)
 }

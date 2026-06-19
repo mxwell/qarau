@@ -19,11 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	JobService_LeaseJob_FullMethodName    = "/qarau.v1.JobService/LeaseJob"
-	JobService_Heartbeat_FullMethodName   = "/qarau.v1.JobService/Heartbeat"
-	JobService_CompleteJob_FullMethodName = "/qarau.v1.JobService/CompleteJob"
-	JobService_FailJob_FullMethodName     = "/qarau.v1.JobService/FailJob"
-	JobService_GetAudio_FullMethodName    = "/qarau.v1.JobService/GetAudio"
+	JobService_LeaseJob_FullMethodName      = "/qarau.v1.JobService/LeaseJob"
+	JobService_Heartbeat_FullMethodName     = "/qarau.v1.JobService/Heartbeat"
+	JobService_CompleteFetch_FullMethodName = "/qarau.v1.JobService/CompleteFetch"
+	JobService_FailJob_FullMethodName       = "/qarau.v1.JobService/FailJob"
+	JobService_GetAudio_FullMethodName      = "/qarau.v1.JobService/GetAudio"
 )
 
 // JobServiceClient is the client API for JobService service.
@@ -38,9 +38,7 @@ type JobServiceClient interface {
 	LeaseJob(ctx context.Context, in *LeaseJobRequest, opts ...grpc.CallOption) (*LeaseJobResponse, error)
 	// Heartbeat extends a lease while a worker is still processing a job.
 	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error)
-	// CompleteJob marks a job done. Client-streaming so the fetch worker can
-	// upload audio bytes after an initial metadata message.
-	CompleteJob(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[CompleteJobRequest, CompleteJobResponse], error)
+	CompleteFetch(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[CompleteFetchRequest, CompleteFetchResponse], error)
 	// FailJob records a failure; api decides whether the job is retried.
 	FailJob(ctx context.Context, in *FailJobRequest, opts ...grpc.CallOption) (*FailJobResponse, error)
 	// GetAudio streams a video's audio blob so the asr worker can transcribe it.
@@ -75,18 +73,18 @@ func (c *jobServiceClient) Heartbeat(ctx context.Context, in *HeartbeatRequest, 
 	return out, nil
 }
 
-func (c *jobServiceClient) CompleteJob(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[CompleteJobRequest, CompleteJobResponse], error) {
+func (c *jobServiceClient) CompleteFetch(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[CompleteFetchRequest, CompleteFetchResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &JobService_ServiceDesc.Streams[0], JobService_CompleteJob_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &JobService_ServiceDesc.Streams[0], JobService_CompleteFetch_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[CompleteJobRequest, CompleteJobResponse]{ClientStream: stream}
+	x := &grpc.GenericClientStream[CompleteFetchRequest, CompleteFetchResponse]{ClientStream: stream}
 	return x, nil
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type JobService_CompleteJobClient = grpc.ClientStreamingClient[CompleteJobRequest, CompleteJobResponse]
+type JobService_CompleteFetchClient = grpc.ClientStreamingClient[CompleteFetchRequest, CompleteFetchResponse]
 
 func (c *jobServiceClient) FailJob(ctx context.Context, in *FailJobRequest, opts ...grpc.CallOption) (*FailJobResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
@@ -129,9 +127,7 @@ type JobServiceServer interface {
 	LeaseJob(context.Context, *LeaseJobRequest) (*LeaseJobResponse, error)
 	// Heartbeat extends a lease while a worker is still processing a job.
 	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
-	// CompleteJob marks a job done. Client-streaming so the fetch worker can
-	// upload audio bytes after an initial metadata message.
-	CompleteJob(grpc.ClientStreamingServer[CompleteJobRequest, CompleteJobResponse]) error
+	CompleteFetch(grpc.ClientStreamingServer[CompleteFetchRequest, CompleteFetchResponse]) error
 	// FailJob records a failure; api decides whether the job is retried.
 	FailJob(context.Context, *FailJobRequest) (*FailJobResponse, error)
 	// GetAudio streams a video's audio blob so the asr worker can transcribe it.
@@ -152,8 +148,8 @@ func (UnimplementedJobServiceServer) LeaseJob(context.Context, *LeaseJobRequest)
 func (UnimplementedJobServiceServer) Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Heartbeat not implemented")
 }
-func (UnimplementedJobServiceServer) CompleteJob(grpc.ClientStreamingServer[CompleteJobRequest, CompleteJobResponse]) error {
-	return status.Error(codes.Unimplemented, "method CompleteJob not implemented")
+func (UnimplementedJobServiceServer) CompleteFetch(grpc.ClientStreamingServer[CompleteFetchRequest, CompleteFetchResponse]) error {
+	return status.Error(codes.Unimplemented, "method CompleteFetch not implemented")
 }
 func (UnimplementedJobServiceServer) FailJob(context.Context, *FailJobRequest) (*FailJobResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method FailJob not implemented")
@@ -218,12 +214,12 @@ func _JobService_Heartbeat_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
-func _JobService_CompleteJob_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(JobServiceServer).CompleteJob(&grpc.GenericServerStream[CompleteJobRequest, CompleteJobResponse]{ServerStream: stream})
+func _JobService_CompleteFetch_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(JobServiceServer).CompleteFetch(&grpc.GenericServerStream[CompleteFetchRequest, CompleteFetchResponse]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type JobService_CompleteJobServer = grpc.ClientStreamingServer[CompleteJobRequest, CompleteJobResponse]
+type JobService_CompleteFetchServer = grpc.ClientStreamingServer[CompleteFetchRequest, CompleteFetchResponse]
 
 func _JobService_FailJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(FailJobRequest)
@@ -276,8 +272,8 @@ var JobService_ServiceDesc = grpc.ServiceDesc{
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "CompleteJob",
-			Handler:       _JobService_CompleteJob_Handler,
+			StreamName:    "CompleteFetch",
+			Handler:       _JobService_CompleteFetch_Handler,
 			ClientStreams: true,
 		},
 		{

@@ -60,7 +60,11 @@ func run() error {
 	grpcServer := grpc.NewServer(opts...)
 
 	queries := dbgen.New(db)
-	jobService := api.NewService(logger, queries)
+	jobService, err := api.NewService(logger, queries, db)
+	if err != nil {
+		logger.Error("failed to create JobService", "err", err)
+		return err
+	}
 	qarauv1.RegisterJobServiceServer(
 		grpcServer,
 		api.NewServer(logger, jobService),

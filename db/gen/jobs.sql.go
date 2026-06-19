@@ -50,3 +50,46 @@ func (q *Queries) ClaimJob(ctx context.Context, arg ClaimJobParams) (ClaimJobRow
 	err := row.Scan(&i.ID, &i.VideoID, &i.OnlineVideoID)
 	return i, err
 }
+
+const createAsrJob = `-- name: CreateAsrJob :one
+INSERT INTO jobs (
+    video_id,
+    type,
+    online_video_id
+) SELECT video_id, 'asr', online_video_id
+FROM jobs AS nested_jobs
+WHERE nested_jobs.id = $1 AND nested_jobs.type = 'fetch'
+RETURNING id
+`
+
+func (q *Queries) CreateAsrJob(ctx context.Context, fetchJobID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, createAsrJob, fetchJobID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const markJobDone = `-- name: MarkJobDone :one
+UPDATE jobs SET
+    state = 'done',
+    finished_at = now()
+WHERE
+    id = $1 AND
+    type = $2 AND
+    state = 'running' AND
+    locked_by = $3
+RETURNING id
+`
+
+type MarkJobDoneParams struct {
+	JobID    int64   `json:"job_id"`
+	JobType  JobType `json:"job_type"`
+	LockedBy *string `json:"locked_by"`
+}
+
+func (q *Queries) MarkJobDone(ctx context.Context, arg MarkJobDoneParams) (int64, error) {
+	row := q.db.QueryRow(ctx, markJobDone, arg.JobID, arg.JobType, arg.LockedBy)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
