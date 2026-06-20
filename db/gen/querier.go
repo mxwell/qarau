@@ -12,7 +12,10 @@ type Querier interface {
 	ClaimJob(ctx context.Context, arg ClaimJobParams) (ClaimJobRow, error)
 	CreateAsrJob(ctx context.Context, fetchJobID int64) (int64, error)
 	CreateAudioBlob(ctx context.Context, arg CreateAudioBlobParams) (int64, error)
+	GetJob(ctx context.Context, jobID int64) (GetJobRow, error)
 	MarkJobDone(ctx context.Context, arg MarkJobDoneParams) (int64, error)
+	MarkJobFailed(ctx context.Context, arg MarkJobFailedParams) (int64, error)
+	UnlockJob(ctx context.Context, arg UnlockJobParams) (int64, error)
 }
 
 var _ Querier = (*Queries)(nil)

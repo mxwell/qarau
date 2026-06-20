@@ -151,3 +151,43 @@ func (s *JobService) CompleteFetchJob(ctx context.Context, workerID string, jobI
 
 	return tx.Commit(ctx)
 }
+
+func (s *JobService) FailJob(ctx context.Context, jobID int64, workerID string, errorMessage string) error {
+	job, err := s.queries.GetJob(ctx, jobID)
+	if err != nil {
+		s.log.Error("failed to load job to mark failed", "job", jobID, "err", err)
+		return err
+	}
+	if job.State != "running" {
+		s.log.Error("unexpected job state", "job", jobID, "state", job.State)
+		return errors.New("unexpected job state")
+	}
+	if job.LockedBy == nil || *job.LockedBy != workerID {
+		s.log.Error("job not locked by worker", "job", jobID, "locked_by", job.LockedBy, "worker", workerID)
+		return errors.New("this worker not allowed to modify the job")
+	}
+	if job.Attempts < job.MaxAttempts {
+		_, err = s.queries.UnlockJob(ctx, dbgen.UnlockJobParams{
+			ErrorMessage: &errorMessage,
+			JobID:        jobID,
+			LockedBy:     &workerID,
+		})
+		if err != nil {
+			s.log.Error("failed to unlock job", "job", jobID, "worker", workerID)
+			return err
+		}
+		s.log.Info("job unlocked by worker", "job", jobID, "worker", workerID)
+	} else {
+		_, err = s.queries.MarkJobFailed(ctx, dbgen.MarkJobFailedParams{
+			ErrorMessage: &errorMessage,
+			JobID:        jobID,
+			LockedBy:     &workerID,
+		})
+		if err != nil {
+			s.log.Error("failed to mark job failed", "job", jobID, "worker", workerID)
+			return err
+		}
+		s.log.Info("job marked failed", "job", jobID, "worker", workerID)
+	}
+	return nil
+}

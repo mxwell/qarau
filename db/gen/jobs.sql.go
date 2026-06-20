@@ -69,9 +69,45 @@ func (q *Queries) CreateAsrJob(ctx context.Context, fetchJobID int64) (int64, er
 	return id, err
 }
 
+const getJob = `-- name: GetJob :one
+SELECT
+    id,
+    state,
+    type,
+    locked_by,
+    attempts,
+    max_attempts
+FROM jobs
+WHERE id = $1
+`
+
+type GetJobRow struct {
+	ID          int64    `json:"id"`
+	State       JobState `json:"state"`
+	Type        JobType  `json:"type"`
+	LockedBy    *string  `json:"locked_by"`
+	Attempts    int32    `json:"attempts"`
+	MaxAttempts int32    `json:"max_attempts"`
+}
+
+func (q *Queries) GetJob(ctx context.Context, jobID int64) (GetJobRow, error) {
+	row := q.db.QueryRow(ctx, getJob, jobID)
+	var i GetJobRow
+	err := row.Scan(
+		&i.ID,
+		&i.State,
+		&i.Type,
+		&i.LockedBy,
+		&i.Attempts,
+		&i.MaxAttempts,
+	)
+	return i, err
+}
+
 const markJobDone = `-- name: MarkJobDone :one
 UPDATE jobs SET
     state = 'done',
+    last_error = NULL,
     finished_at = now()
 WHERE
     id = $1 AND
@@ -89,6 +125,58 @@ type MarkJobDoneParams struct {
 
 func (q *Queries) MarkJobDone(ctx context.Context, arg MarkJobDoneParams) (int64, error) {
 	row := q.db.QueryRow(ctx, markJobDone, arg.JobID, arg.JobType, arg.LockedBy)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const markJobFailed = `-- name: MarkJobFailed :one
+UPDATE jobs SET
+    state = 'failed',
+    locked_by = NULL,
+    locked_until = NULL,
+    last_error = $1
+WHERE
+    id = $2 AND
+    state = 'running' AND
+    locked_by = $3
+RETURNING id
+`
+
+type MarkJobFailedParams struct {
+	ErrorMessage *string `json:"error_message"`
+	JobID        int64   `json:"job_id"`
+	LockedBy     *string `json:"locked_by"`
+}
+
+func (q *Queries) MarkJobFailed(ctx context.Context, arg MarkJobFailedParams) (int64, error) {
+	row := q.db.QueryRow(ctx, markJobFailed, arg.ErrorMessage, arg.JobID, arg.LockedBy)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const unlockJob = `-- name: UnlockJob :one
+UPDATE jobs SET
+    state = 'pending',
+    locked_by = NULL,
+    locked_until = NULL,
+    last_error = $1
+WHERE
+    id = $2 AND
+    state = 'running' AND
+    locked_by = $3
+RETURNING id
+`
+
+type UnlockJobParams struct {
+	ErrorMessage *string `json:"error_message"`
+	JobID        int64   `json:"job_id"`
+	LockedBy     *string `json:"locked_by"`
+}
+
+func (q *Queries) UnlockJob(ctx context.Context, arg UnlockJobParams) (int64, error) {
+	row := q.db.QueryRow(ctx, unlockJob, arg.ErrorMessage, arg.JobID, arg.LockedBy)
 	var id int64
 	err := row.Scan(&id)
 	return id, err

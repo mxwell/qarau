@@ -198,6 +198,20 @@ func (fw *FetchWorker) streamAudio(ctx context.Context, job claimedJob, audioPat
 	return nil
 }
 
+func (fw *FetchWorker) failFetch(ctx context.Context, job claimedJob, errorMessage string) error {
+	_, err := fw.client.FailJob(ctx, &qarauv1.FailJobRequest{
+		JobId:        job.jobID,
+		WorkerId:     fw.workerID,
+		ErrorMessage: errorMessage,
+	})
+	if err != nil {
+		fw.logger.Error("FailJob request failed", "err", err)
+		return err
+	}
+	fw.logger.Info("FailJob request sent")
+	return nil
+}
+
 /*
  * fetchAudio only returns errors that should terminate the whole worker
  */
@@ -213,7 +227,12 @@ func (fw *FetchWorker) fetchAudio(ctx context.Context, job claimedJob) error {
 			return ctx.Err()
 		}
 		fw.logger.Error("download failed", "err", err)
-		// TODO report fail to API
+		errorMessage := fmt.Sprintf("download failed: %v", err)
+		if failErr := fw.failFetch(ctx, job, errorMessage); failErr != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+		}
 		return nil // the error doesn't show up in the main loop as it's business as usual
 	}
 	fw.logger.Info("downloaded audio", "path", audioPath)
@@ -285,6 +304,9 @@ func (fw *FetchWorker) Loop(ctx context.Context) error {
 		fw.logger.Info("claimed fetch job", "id", job.jobID, "onlineVideoId", job.onlineVideoId)
 		if err := fw.fetchAudio(ctx, job); err != nil {
 			return err
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
 	}
 }

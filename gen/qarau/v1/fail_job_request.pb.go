@@ -25,7 +25,7 @@ type FailJobRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	JobId         int64                  `protobuf:"varint,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
 	WorkerId      string                 `protobuf:"bytes,2,opt,name=worker_id,json=workerId,proto3" json:"worker_id,omitempty"`
-	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	ErrorMessage  string                 `protobuf:"bytes,3,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -74,9 +74,9 @@ func (x *FailJobRequest) GetWorkerId() string {
 	return ""
 }
 
-func (x *FailJobRequest) GetError() string {
+func (x *FailJobRequest) GetErrorMessage() string {
 	if x != nil {
-		return x.Error
+		return x.ErrorMessage
 	}
 	return ""
 }
@@ -85,11 +85,11 @@ var File_qarau_v1_fail_job_request_proto protoreflect.FileDescriptor
 
 const file_qarau_v1_fail_job_request_proto_rawDesc = "" +
 	"\n" +
-	"\x1fqarau/v1/fail_job_request.proto\x12\bqarau.v1\"Z\n" +
+	"\x1fqarau/v1/fail_job_request.proto\x12\bqarau.v1\"i\n" +
 	"\x0eFailJobRequest\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\x03R\x05jobId\x12\x1b\n" +
-	"\tworker_id\x18\x02 \x01(\tR\bworkerId\x12\x14\n" +
-	"\x05error\x18\x03 \x01(\tR\x05errorB.Z,github.com/mxwell/qarau/gen/qarau/v1;qarauv1b\x06proto3"
+	"\tworker_id\x18\x02 \x01(\tR\bworkerId\x12#\n" +
+	"\rerror_message\x18\x03 \x01(\tR\ferrorMessageB.Z,github.com/mxwell/qarau/gen/qarau/v1;qarauv1b\x06proto3"
 
 var (
 	file_qarau_v1_fail_job_request_proto_rawDescOnce sync.Once

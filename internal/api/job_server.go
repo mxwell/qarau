@@ -134,3 +134,11 @@ func (s *JobServer) CompleteFetch(stream grpc.ClientStreamingServer[qarauv1.Comp
 		}
 	}
 }
+
+func (s *JobServer) FailJob(ctx context.Context, request *qarauv1.FailJobRequest) (*qarauv1.FailJobResponse, error) {
+	s.log.Info("received FailJob request", "job", request.JobId, "worker", request.WorkerId, "errorMessage", request.ErrorMessage)
+	if err := s.service.FailJob(ctx, request.JobId, request.WorkerId, request.ErrorMessage); err != nil {
+		return &qarauv1.FailJobResponse{}, status.Error(codes.Internal, "failed to mark the job failed")
+	}
+	return &qarauv1.FailJobResponse{}, nil
+}

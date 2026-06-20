@@ -1,3 +1,14 @@
+-- name: GetJob :one
+SELECT
+    id,
+    state,
+    type,
+    locked_by,
+    attempts,
+    max_attempts
+FROM jobs
+WHERE id = sqlc.arg('job_id');
+
 -- name: ClaimJob :one
 UPDATE jobs SET
     state = 'running',
@@ -21,6 +32,7 @@ RETURNING id, video_id, online_video_id;
 -- name: MarkJobDone :one
 UPDATE jobs SET
     state = 'done',
+    last_error = NULL,
     finished_at = now()
 WHERE
     id = sqlc.arg('job_id') AND
@@ -37,4 +49,28 @@ INSERT INTO jobs (
 ) SELECT video_id, 'asr', online_video_id
 FROM jobs AS nested_jobs
 WHERE nested_jobs.id = sqlc.arg('fetch_job_id') AND nested_jobs.type = 'fetch'
+RETURNING id;
+
+-- name: UnlockJob :one
+UPDATE jobs SET
+    state = 'pending',
+    locked_by = NULL,
+    locked_until = NULL,
+    last_error = sqlc.arg('error_message')
+WHERE
+    id = sqlc.arg('job_id') AND
+    state = 'running' AND
+    locked_by = sqlc.arg('locked_by')
+RETURNING id;
+
+-- name: MarkJobFailed :one
+UPDATE jobs SET
+    state = 'failed',
+    locked_by = NULL,
+    locked_until = NULL,
+    last_error = sqlc.arg('error_message')
+WHERE
+    id = sqlc.arg('job_id') AND
+    state = 'running' AND
+    locked_by = sqlc.arg('locked_by')
 RETURNING id;
