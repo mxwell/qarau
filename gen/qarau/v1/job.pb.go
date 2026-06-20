@@ -89,393 +89,16 @@ func (x *Job) GetPayload() *JobPayload {
 	return nil
 }
 
-type LeaseJobResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Job           *Job                   `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"` // unset when no job is currently available
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *LeaseJobResponse) Reset() {
-	*x = LeaseJobResponse{}
-	mi := &file_qarau_v1_job_proto_msgTypes[1]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *LeaseJobResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*LeaseJobResponse) ProtoMessage() {}
-
-func (x *LeaseJobResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_qarau_v1_job_proto_msgTypes[1]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use LeaseJobResponse.ProtoReflect.Descriptor instead.
-func (*LeaseJobResponse) Descriptor() ([]byte, []int) {
-	return file_qarau_v1_job_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *LeaseJobResponse) GetJob() *Job {
-	if x != nil {
-		return x.Job
-	}
-	return nil
-}
-
-type HeartbeatRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	JobId         int64                  `protobuf:"varint,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
-	WorkerId      string                 `protobuf:"bytes,2,opt,name=worker_id,json=workerId,proto3" json:"worker_id,omitempty"`
-	ProgressPct   uint32                 `protobuf:"varint,3,opt,name=progress_pct,json=progressPct,proto3" json:"progress_pct,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *HeartbeatRequest) Reset() {
-	*x = HeartbeatRequest{}
-	mi := &file_qarau_v1_job_proto_msgTypes[2]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *HeartbeatRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*HeartbeatRequest) ProtoMessage() {}
-
-func (x *HeartbeatRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_qarau_v1_job_proto_msgTypes[2]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use HeartbeatRequest.ProtoReflect.Descriptor instead.
-func (*HeartbeatRequest) Descriptor() ([]byte, []int) {
-	return file_qarau_v1_job_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *HeartbeatRequest) GetJobId() int64 {
-	if x != nil {
-		return x.JobId
-	}
-	return 0
-}
-
-func (x *HeartbeatRequest) GetWorkerId() string {
-	if x != nil {
-		return x.WorkerId
-	}
-	return ""
-}
-
-func (x *HeartbeatRequest) GetProgressPct() uint32 {
-	if x != nil {
-		return x.ProgressPct
-	}
-	return 0
-}
-
-type HeartbeatResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	StillLeased   bool                   `protobuf:"varint,1,opt,name=still_leased,json=stillLeased,proto3" json:"still_leased,omitempty"` // false if the lease was lost (expired and reclaimed)
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *HeartbeatResponse) Reset() {
-	*x = HeartbeatResponse{}
-	mi := &file_qarau_v1_job_proto_msgTypes[3]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *HeartbeatResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*HeartbeatResponse) ProtoMessage() {}
-
-func (x *HeartbeatResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_qarau_v1_job_proto_msgTypes[3]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use HeartbeatResponse.ProtoReflect.Descriptor instead.
-func (*HeartbeatResponse) Descriptor() ([]byte, []int) {
-	return file_qarau_v1_job_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *HeartbeatResponse) GetStillLeased() bool {
-	if x != nil {
-		return x.StillLeased
-	}
-	return false
-}
-
-type FailJobRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	JobId         int64                  `protobuf:"varint,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
-	WorkerId      string                 `protobuf:"bytes,2,opt,name=worker_id,json=workerId,proto3" json:"worker_id,omitempty"`
-	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *FailJobRequest) Reset() {
-	*x = FailJobRequest{}
-	mi := &file_qarau_v1_job_proto_msgTypes[4]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *FailJobRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*FailJobRequest) ProtoMessage() {}
-
-func (x *FailJobRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_qarau_v1_job_proto_msgTypes[4]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use FailJobRequest.ProtoReflect.Descriptor instead.
-func (*FailJobRequest) Descriptor() ([]byte, []int) {
-	return file_qarau_v1_job_proto_rawDescGZIP(), []int{4}
-}
-
-func (x *FailJobRequest) GetJobId() int64 {
-	if x != nil {
-		return x.JobId
-	}
-	return 0
-}
-
-func (x *FailJobRequest) GetWorkerId() string {
-	if x != nil {
-		return x.WorkerId
-	}
-	return ""
-}
-
-func (x *FailJobRequest) GetError() string {
-	if x != nil {
-		return x.Error
-	}
-	return ""
-}
-
-type FailJobResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	WillRetry     bool                   `protobuf:"varint,1,opt,name=will_retry,json=willRetry,proto3" json:"will_retry,omitempty"` // false when attempts have been exhausted
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *FailJobResponse) Reset() {
-	*x = FailJobResponse{}
-	mi := &file_qarau_v1_job_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *FailJobResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*FailJobResponse) ProtoMessage() {}
-
-func (x *FailJobResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_qarau_v1_job_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use FailJobResponse.ProtoReflect.Descriptor instead.
-func (*FailJobResponse) Descriptor() ([]byte, []int) {
-	return file_qarau_v1_job_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *FailJobResponse) GetWillRetry() bool {
-	if x != nil {
-		return x.WillRetry
-	}
-	return false
-}
-
-type GetAudioRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	VideoId       int64                  `protobuf:"varint,1,opt,name=video_id,json=videoId,proto3" json:"video_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GetAudioRequest) Reset() {
-	*x = GetAudioRequest{}
-	mi := &file_qarau_v1_job_proto_msgTypes[6]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GetAudioRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GetAudioRequest) ProtoMessage() {}
-
-func (x *GetAudioRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_qarau_v1_job_proto_msgTypes[6]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GetAudioRequest.ProtoReflect.Descriptor instead.
-func (*GetAudioRequest) Descriptor() ([]byte, []int) {
-	return file_qarau_v1_job_proto_rawDescGZIP(), []int{6}
-}
-
-func (x *GetAudioRequest) GetVideoId() int64 {
-	if x != nil {
-		return x.VideoId
-	}
-	return 0
-}
-
-type AudioChunk struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Content       []byte                 `protobuf:"bytes,1,opt,name=content,proto3" json:"content,omitempty"`
-	MediaType     string                 `protobuf:"bytes,2,opt,name=media_type,json=mediaType,proto3" json:"media_type,omitempty"` // set on the first chunk
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *AudioChunk) Reset() {
-	*x = AudioChunk{}
-	mi := &file_qarau_v1_job_proto_msgTypes[7]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AudioChunk) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AudioChunk) ProtoMessage() {}
-
-func (x *AudioChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_qarau_v1_job_proto_msgTypes[7]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AudioChunk.ProtoReflect.Descriptor instead.
-func (*AudioChunk) Descriptor() ([]byte, []int) {
-	return file_qarau_v1_job_proto_rawDescGZIP(), []int{7}
-}
-
-func (x *AudioChunk) GetContent() []byte {
-	if x != nil {
-		return x.Content
-	}
-	return nil
-}
-
-func (x *AudioChunk) GetMediaType() string {
-	if x != nil {
-		return x.MediaType
-	}
-	return ""
-}
-
 var File_qarau_v1_job_proto protoreflect.FileDescriptor
 
 const file_qarau_v1_job_proto_rawDesc = "" +
 	"\n" +
-	"\x12qarau/v1/job.proto\x12\bqarau.v1\x1a%qarau/v1/complete_fetch_request.proto\x1a&qarau/v1/complete_fetch_response.proto\x1a\x1aqarau/v1/job_payload.proto\x1a\x17qarau/v1/job_type.proto\x1a qarau/v1/lease_job_request.proto\"\x87\x01\n" +
+	"\x12qarau/v1/job.proto\x12\bqarau.v1\x1a\x1aqarau/v1/job_payload.proto\x1a\x17qarau/v1/job_type.proto\"\x87\x01\n" +
 	"\x03Job\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x03R\x02id\x12\x19\n" +
 	"\bvideo_id\x18\x02 \x01(\x03R\avideoId\x12%\n" +
 	"\x04type\x18\x03 \x01(\x0e2\x11.qarau.v1.JobTypeR\x04type\x12.\n" +
-	"\apayload\x18\x04 \x01(\v2\x14.qarau.v1.JobPayloadR\apayload\"3\n" +
-	"\x10LeaseJobResponse\x12\x1f\n" +
-	"\x03job\x18\x01 \x01(\v2\r.qarau.v1.JobR\x03job\"i\n" +
-	"\x10HeartbeatRequest\x12\x15\n" +
-	"\x06job_id\x18\x01 \x01(\x03R\x05jobId\x12\x1b\n" +
-	"\tworker_id\x18\x02 \x01(\tR\bworkerId\x12!\n" +
-	"\fprogress_pct\x18\x03 \x01(\rR\vprogressPct\"6\n" +
-	"\x11HeartbeatResponse\x12!\n" +
-	"\fstill_leased\x18\x01 \x01(\bR\vstillLeased\"Z\n" +
-	"\x0eFailJobRequest\x12\x15\n" +
-	"\x06job_id\x18\x01 \x01(\x03R\x05jobId\x12\x1b\n" +
-	"\tworker_id\x18\x02 \x01(\tR\bworkerId\x12\x14\n" +
-	"\x05error\x18\x03 \x01(\tR\x05error\"0\n" +
-	"\x0fFailJobResponse\x12\x1d\n" +
-	"\n" +
-	"will_retry\x18\x01 \x01(\bR\twillRetry\",\n" +
-	"\x0fGetAudioRequest\x12\x19\n" +
-	"\bvideo_id\x18\x01 \x01(\x03R\avideoId\"E\n" +
-	"\n" +
-	"AudioChunk\x12\x18\n" +
-	"\acontent\x18\x01 \x01(\fR\acontent\x12\x1d\n" +
-	"\n" +
-	"media_type\x18\x02 \x01(\tR\tmediaType2\xe8\x02\n" +
-	"\n" +
-	"JobService\x12A\n" +
-	"\bLeaseJob\x12\x19.qarau.v1.LeaseJobRequest\x1a\x1a.qarau.v1.LeaseJobResponse\x12D\n" +
-	"\tHeartbeat\x12\x1a.qarau.v1.HeartbeatRequest\x1a\x1b.qarau.v1.HeartbeatResponse\x12R\n" +
-	"\rCompleteFetch\x12\x1e.qarau.v1.CompleteFetchRequest\x1a\x1f.qarau.v1.CompleteFetchResponse(\x01\x12>\n" +
-	"\aFailJob\x12\x18.qarau.v1.FailJobRequest\x1a\x19.qarau.v1.FailJobResponse\x12=\n" +
-	"\bGetAudio\x12\x19.qarau.v1.GetAudioRequest\x1a\x14.qarau.v1.AudioChunk0\x01B.Z,github.com/mxwell/qarau/gen/qarau/v1;qarauv1b\x06proto3"
+	"\apayload\x18\x04 \x01(\v2\x14.qarau.v1.JobPayloadR\apayloadB.Z,github.com/mxwell/qarau/gen/qarau/v1;qarauv1b\x06proto3"
 
 var (
 	file_qarau_v1_job_proto_rawDescOnce sync.Once
@@ -489,41 +112,20 @@ func file_qarau_v1_job_proto_rawDescGZIP() []byte {
 	return file_qarau_v1_job_proto_rawDescData
 }
 
-var file_qarau_v1_job_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_qarau_v1_job_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_qarau_v1_job_proto_goTypes = []any{
-	(*Job)(nil),                   // 0: qarau.v1.Job
-	(*LeaseJobResponse)(nil),      // 1: qarau.v1.LeaseJobResponse
-	(*HeartbeatRequest)(nil),      // 2: qarau.v1.HeartbeatRequest
-	(*HeartbeatResponse)(nil),     // 3: qarau.v1.HeartbeatResponse
-	(*FailJobRequest)(nil),        // 4: qarau.v1.FailJobRequest
-	(*FailJobResponse)(nil),       // 5: qarau.v1.FailJobResponse
-	(*GetAudioRequest)(nil),       // 6: qarau.v1.GetAudioRequest
-	(*AudioChunk)(nil),            // 7: qarau.v1.AudioChunk
-	(JobType)(0),                  // 8: qarau.v1.JobType
-	(*JobPayload)(nil),            // 9: qarau.v1.JobPayload
-	(*LeaseJobRequest)(nil),       // 10: qarau.v1.LeaseJobRequest
-	(*CompleteFetchRequest)(nil),  // 11: qarau.v1.CompleteFetchRequest
-	(*CompleteFetchResponse)(nil), // 12: qarau.v1.CompleteFetchResponse
+	(*Job)(nil),        // 0: qarau.v1.Job
+	(JobType)(0),       // 1: qarau.v1.JobType
+	(*JobPayload)(nil), // 2: qarau.v1.JobPayload
 }
 var file_qarau_v1_job_proto_depIdxs = []int32{
-	8,  // 0: qarau.v1.Job.type:type_name -> qarau.v1.JobType
-	9,  // 1: qarau.v1.Job.payload:type_name -> qarau.v1.JobPayload
-	0,  // 2: qarau.v1.LeaseJobResponse.job:type_name -> qarau.v1.Job
-	10, // 3: qarau.v1.JobService.LeaseJob:input_type -> qarau.v1.LeaseJobRequest
-	2,  // 4: qarau.v1.JobService.Heartbeat:input_type -> qarau.v1.HeartbeatRequest
-	11, // 5: qarau.v1.JobService.CompleteFetch:input_type -> qarau.v1.CompleteFetchRequest
-	4,  // 6: qarau.v1.JobService.FailJob:input_type -> qarau.v1.FailJobRequest
-	6,  // 7: qarau.v1.JobService.GetAudio:input_type -> qarau.v1.GetAudioRequest
-	1,  // 8: qarau.v1.JobService.LeaseJob:output_type -> qarau.v1.LeaseJobResponse
-	3,  // 9: qarau.v1.JobService.Heartbeat:output_type -> qarau.v1.HeartbeatResponse
-	12, // 10: qarau.v1.JobService.CompleteFetch:output_type -> qarau.v1.CompleteFetchResponse
-	5,  // 11: qarau.v1.JobService.FailJob:output_type -> qarau.v1.FailJobResponse
-	7,  // 12: qarau.v1.JobService.GetAudio:output_type -> qarau.v1.AudioChunk
-	8,  // [8:13] is the sub-list for method output_type
-	3,  // [3:8] is the sub-list for method input_type
-	3,  // [3:3] is the sub-list for extension type_name
-	3,  // [3:3] is the sub-list for extension extendee
-	0,  // [0:3] is the sub-list for field type_name
+	1, // 0: qarau.v1.Job.type:type_name -> qarau.v1.JobType
+	2, // 1: qarau.v1.Job.payload:type_name -> qarau.v1.JobPayload
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_qarau_v1_job_proto_init() }
@@ -531,20 +133,17 @@ func file_qarau_v1_job_proto_init() {
 	if File_qarau_v1_job_proto != nil {
 		return
 	}
-	file_qarau_v1_complete_fetch_request_proto_init()
-	file_qarau_v1_complete_fetch_response_proto_init()
 	file_qarau_v1_job_payload_proto_init()
 	file_qarau_v1_job_type_proto_init()
-	file_qarau_v1_lease_job_request_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_qarau_v1_job_proto_rawDesc), len(file_qarau_v1_job_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   1,
 			NumExtensions: 0,
-			NumServices:   1,
+			NumServices:   0,
 		},
 		GoTypes:           file_qarau_v1_job_proto_goTypes,
 		DependencyIndexes: file_qarau_v1_job_proto_depIdxs,

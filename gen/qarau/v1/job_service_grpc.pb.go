@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.2
 // - protoc             v3.12.4
-// source: qarau/v1/job.proto
+// source: qarau/v1/job_service.proto
 
 package qarauv1
 
@@ -20,10 +20,8 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	JobService_LeaseJob_FullMethodName      = "/qarau.v1.JobService/LeaseJob"
-	JobService_Heartbeat_FullMethodName     = "/qarau.v1.JobService/Heartbeat"
 	JobService_CompleteFetch_FullMethodName = "/qarau.v1.JobService/CompleteFetch"
 	JobService_FailJob_FullMethodName       = "/qarau.v1.JobService/FailJob"
-	JobService_GetAudio_FullMethodName      = "/qarau.v1.JobService/GetAudio"
 )
 
 // JobServiceClient is the client API for JobService service.
@@ -36,13 +34,8 @@ const (
 type JobServiceClient interface {
 	// LeaseJob claims the oldest claimable job of the given type (SKIP LOCKED).
 	LeaseJob(ctx context.Context, in *LeaseJobRequest, opts ...grpc.CallOption) (*LeaseJobResponse, error)
-	// Heartbeat extends a lease while a worker is still processing a job.
-	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error)
 	CompleteFetch(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[CompleteFetchRequest, CompleteFetchResponse], error)
-	// FailJob records a failure; api decides whether the job is retried.
 	FailJob(ctx context.Context, in *FailJobRequest, opts ...grpc.CallOption) (*FailJobResponse, error)
-	// GetAudio streams a video's audio blob so the asr worker can transcribe it.
-	GetAudio(ctx context.Context, in *GetAudioRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[AudioChunk], error)
 }
 
 type jobServiceClient struct {
@@ -57,16 +50,6 @@ func (c *jobServiceClient) LeaseJob(ctx context.Context, in *LeaseJobRequest, op
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(LeaseJobResponse)
 	err := c.cc.Invoke(ctx, JobService_LeaseJob_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *jobServiceClient) Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(HeartbeatResponse)
-	err := c.cc.Invoke(ctx, JobService_Heartbeat_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -96,25 +79,6 @@ func (c *jobServiceClient) FailJob(ctx context.Context, in *FailJobRequest, opts
 	return out, nil
 }
 
-func (c *jobServiceClient) GetAudio(ctx context.Context, in *GetAudioRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[AudioChunk], error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &JobService_ServiceDesc.Streams[1], JobService_GetAudio_FullMethodName, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &grpc.GenericClientStream[GetAudioRequest, AudioChunk]{ClientStream: stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type JobService_GetAudioClient = grpc.ServerStreamingClient[AudioChunk]
-
 // JobServiceServer is the server API for JobService service.
 // All implementations must embed UnimplementedJobServiceServer
 // for forward compatibility.
@@ -125,13 +89,8 @@ type JobService_GetAudioClient = grpc.ServerStreamingClient[AudioChunk]
 type JobServiceServer interface {
 	// LeaseJob claims the oldest claimable job of the given type (SKIP LOCKED).
 	LeaseJob(context.Context, *LeaseJobRequest) (*LeaseJobResponse, error)
-	// Heartbeat extends a lease while a worker is still processing a job.
-	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
 	CompleteFetch(grpc.ClientStreamingServer[CompleteFetchRequest, CompleteFetchResponse]) error
-	// FailJob records a failure; api decides whether the job is retried.
 	FailJob(context.Context, *FailJobRequest) (*FailJobResponse, error)
-	// GetAudio streams a video's audio blob so the asr worker can transcribe it.
-	GetAudio(*GetAudioRequest, grpc.ServerStreamingServer[AudioChunk]) error
 	mustEmbedUnimplementedJobServiceServer()
 }
 
@@ -145,17 +104,11 @@ type UnimplementedJobServiceServer struct{}
 func (UnimplementedJobServiceServer) LeaseJob(context.Context, *LeaseJobRequest) (*LeaseJobResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method LeaseJob not implemented")
 }
-func (UnimplementedJobServiceServer) Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method Heartbeat not implemented")
-}
 func (UnimplementedJobServiceServer) CompleteFetch(grpc.ClientStreamingServer[CompleteFetchRequest, CompleteFetchResponse]) error {
 	return status.Error(codes.Unimplemented, "method CompleteFetch not implemented")
 }
 func (UnimplementedJobServiceServer) FailJob(context.Context, *FailJobRequest) (*FailJobResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method FailJob not implemented")
-}
-func (UnimplementedJobServiceServer) GetAudio(*GetAudioRequest, grpc.ServerStreamingServer[AudioChunk]) error {
-	return status.Error(codes.Unimplemented, "method GetAudio not implemented")
 }
 func (UnimplementedJobServiceServer) mustEmbedUnimplementedJobServiceServer() {}
 func (UnimplementedJobServiceServer) testEmbeddedByValue()                    {}
@@ -196,24 +149,6 @@ func _JobService_LeaseJob_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
-func _JobService_Heartbeat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(HeartbeatRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(JobServiceServer).Heartbeat(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: JobService_Heartbeat_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(JobServiceServer).Heartbeat(ctx, req.(*HeartbeatRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _JobService_CompleteFetch_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(JobServiceServer).CompleteFetch(&grpc.GenericServerStream[CompleteFetchRequest, CompleteFetchResponse]{ServerStream: stream})
 }
@@ -239,17 +174,6 @@ func _JobService_FailJob_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
-func _JobService_GetAudio_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(GetAudioRequest)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(JobServiceServer).GetAudio(m, &grpc.GenericServerStream[GetAudioRequest, AudioChunk]{ServerStream: stream})
-}
-
-// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type JobService_GetAudioServer = grpc.ServerStreamingServer[AudioChunk]
-
 // JobService_ServiceDesc is the grpc.ServiceDesc for JobService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -262,10 +186,6 @@ var JobService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _JobService_LeaseJob_Handler,
 		},
 		{
-			MethodName: "Heartbeat",
-			Handler:    _JobService_Heartbeat_Handler,
-		},
-		{
 			MethodName: "FailJob",
 			Handler:    _JobService_FailJob_Handler,
 		},
@@ -276,11 +196,6 @@ var JobService_ServiceDesc = grpc.ServiceDesc{
 			Handler:       _JobService_CompleteFetch_Handler,
 			ClientStreams: true,
 		},
-		{
-			StreamName:    "GetAudio",
-			Handler:       _JobService_GetAudio_Handler,
-			ServerStreams: true,
-		},
 	},
-	Metadata: "qarau/v1/job.proto",
+	Metadata: "qarau/v1/job_service.proto",
 }

@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package qarau.v1;
+
+option go_package = "github.com/mxwell/qarau/gen/qarau/v1;qarauv1";
+
+import "qarau/v1/complete_fetch_request.proto";
+import "qarau/v1/complete_fetch_response.proto";
+import "qarau/v1/fail_job_request.proto";
+import "qarau/v1/fail_job_response.proto";
+import "qarau/v1/lease_job_request.proto";
+import "qarau/v1/lease_job_response.proto";
+
+// JobService is the worker-facing API. The fetch and asr workers are gRPC
+// clients of api; they poll for work and report results here. Only api touches
+// Postgres.
+service JobService {
+    // LeaseJob claims the oldest claimable job of the given type (SKIP LOCKED).
+    rpc LeaseJob(LeaseJobRequest) returns (LeaseJobResponse);
+
+    rpc CompleteFetch(stream CompleteFetchRequest) returns (CompleteFetchResponse);
+
+    rpc FailJob(FailJobRequest) returns (FailJobResponse);
+}

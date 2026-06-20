@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package qarau.v1;
+
+option go_package = "github.com/mxwell/qarau/gen/qarau/v1;qarauv1";
+
+import "qarau/v1/job.proto";
+
+message LeaseJobResponse {
+  Job job = 1; // unset when no job is currently available
+}
