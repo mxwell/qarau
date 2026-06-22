@@ -16,6 +16,7 @@ type APIConfig struct {
 	RESTPort    uint16
 	GracePeriod time.Duration
 	DBUrl       string
+	YTApiKey    string
 	LogLevel    slog.Level
 }
 
@@ -46,6 +47,7 @@ func LoadAPI() (APIConfig, error) {
 		RESTPort:    v.GetUint16("REST_PORT"),
 		GracePeriod: v.GetDuration("GRACE_PERIOD"),
 		DBUrl:       v.GetString("DB_URL"),
+		YTApiKey:    v.GetString("YT_API_KEY"),
 		LogLevel:    logLevel,
 	}
 
@@ -60,6 +62,9 @@ func LoadAPI() (APIConfig, error) {
 	}
 	if !strings.HasPrefix(cfg.DBUrl, "postgres://") {
 		return cfg, fmt.Errorf("api config error: invalid DB URL %v", cfg.DBUrl)
+	}
+	if cfg.YTApiKey == "" {
+		return cfg, errors.New("api config error: invalid YouTube API key")
 	}
 	return cfg, nil
 }

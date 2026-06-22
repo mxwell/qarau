@@ -7,14 +7,17 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 	dbgen "github.com/mxwell/qarau/db/gen"
 	qarauv1 "github.com/mxwell/qarau/gen/qarau/v1"
 	"github.com/mxwell/qarau/internal/api"
 	"github.com/mxwell/qarau/internal/config"
+	"github.com/mxwell/qarau/internal/logging"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 )
@@ -54,8 +57,8 @@ func run() error {
 		logger.Error("failed to listen", "address", address, "err", err)
 		return err
 	}
-	logger.Info("listening grpc", "port", cfg.GRPCPort)
 
+	// gRPC
 	var opts []grpc.ServerOption
 	grpcServer := grpc.NewServer(opts...)
 
@@ -70,18 +73,64 @@ func run() error {
 		api.NewServer(logger, jobService),
 	)
 
+	// Fiber app
+	app := fiber.New()
+	app.Use(logging.FiberRequestLogger(logger))
+
+	ytClient, err := api.NewYtClient(ctx, logger, cfg.YTApiKey)
+	if err != nil {
+		logger.Error("failed to create YouTube API client", "err", err)
+		return err
+	}
+	videoService, err := api.NewVideoService(logger, queries, ytClient)
+	if err != nil {
+		logger.Error("failed to create VideoService", "err", err)
+		return err
+	}
+	videoHandler, err := api.NewVideoHandler(logger, videoService)
+	if err != nil {
+		logger.Error("failed to create VideoHandler", "err", err)
+		return err
+	}
+
+	apiRouter := app.Group("/api/v1")
+	videoHandler.Register(apiRouter)
+
 	group, groupCtx := errgroup.WithContext(ctx)
 
 	group.Go(func() error {
 		<-groupCtx.Done() // wakes on signal or sibling failure
+
+		// launch 2 shutdown procedures (gRPC and Fiber) and wait for both to finish
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		go func() {
+			defer wg.Done()
+			grpcServer.GracefulStop()
+			logger.Info("grpc server graceful stop is done")
+		}()
+		go func() {
+			defer wg.Done()
+			logger.Info("shutting down app")
+			appErr := app.Shutdown()
+			if appErr != nil {
+				logger.Error("failed to shutdown app", "err", appErr)
+			} else {
+				logger.Info("fiber app shutdown is done")
+			}
+		}()
+
 		done := make(chan struct{})
 		go func() {
-			grpcServer.GracefulStop()
+			wg.Wait()
 			close(done)
 		}()
+
+		// waiting for shutdown procedures to end but with a timer
 		select {
 		case <-done:
-			logger.Info("graceful stop finished ok")
+			logger.Info("shutdown procedures are done")
 		case <-time.After(cfg.GracePeriod):
 			logger.Warn("force stop after delay", "grace_period", cfg.GracePeriod)
 			grpcServer.Stop()
@@ -90,6 +139,7 @@ func run() error {
 	})
 
 	group.Go(func() error {
+		logger.Info("grpc listening", "port", cfg.GRPCPort)
 		if err := grpcServer.Serve(lis); err != nil {
 			logger.Error("grpc serve failed", "err", err)
 			return err
@@ -97,7 +147,15 @@ func run() error {
 		return nil
 	})
 
-	// TODO start REST (fiber) server
+	group.Go(func() error {
+		logger.Info("rest api listening", "port", cfg.RESTPort)
+		addr := fmt.Sprintf(":%d", cfg.RESTPort)
+		if err := app.Listen(addr); err != nil {
+			logger.Error("rest api serve failed", "err", err)
+			return err
+		}
+		return nil
+	})
 
 	logger.Info("starting group")
 	return group.Wait()
