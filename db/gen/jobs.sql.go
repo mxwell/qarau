@@ -104,6 +104,43 @@ func (q *Queries) GetJob(ctx context.Context, jobID int64) (GetJobRow, error) {
 	return i, err
 }
 
+const getVideoJobs = `-- name: GetVideoJobs :many
+SELECT
+    id,
+    state,
+    type
+FROM jobs
+WHERE
+    video_id = $1
+LIMIT 3
+`
+
+type GetVideoJobsRow struct {
+	ID    int64    `json:"id"`
+	State JobState `json:"state"`
+	Type  JobType  `json:"type"`
+}
+
+func (q *Queries) GetVideoJobs(ctx context.Context, videoID int64) ([]GetVideoJobsRow, error) {
+	rows, err := q.db.Query(ctx, getVideoJobs, videoID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetVideoJobsRow
+	for rows.Next() {
+		var i GetVideoJobsRow
+		if err := rows.Scan(&i.ID, &i.State, &i.Type); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markJobDone = `-- name: MarkJobDone :one
 UPDATE jobs SET
     state = 'done',

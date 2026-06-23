@@ -48,11 +48,17 @@ func (h *VideoHandler) Probe(c *fiber.Ctx) error {
 		}
 		return internalError(c, "internal error while probing video")
 	}
-	// TODO get processingState (new, pending, started, finished, failed)
-	return probedVideoJSON(c, video, "unknown")
+	jobs, err := h.svc.GetVideoJobs(c.UserContext(), video.ID)
+	if err != nil {
+		h.log.Error("failed to load video jobs", "onlineVideoID", onlineVideoID, "err", err)
+		return internalError(c, "internal error while checking processing state")
+	}
+	processingState := jobs.GetProcessingState()
+	h.log.Info("checked video processing state", "onlineVideoID", onlineVideoID, "processingState", processingState)
+	return probedVideoJSON(c, video, processingState)
 }
 
-func probedVideoJSON(c *fiber.Ctx, video *Video, processingState string) error {
+func probedVideoJSON(c *fiber.Ctx, video *Video, processingState ProcessingState) error {
 	return c.JSON(fiber.Map{
 		"video": fiber.Map{
 			"id":              video.ID,

@@ -15,6 +15,7 @@ type Querier interface {
 	CreateVideo(ctx context.Context, arg CreateVideoParams) (int64, error)
 	GetJob(ctx context.Context, jobID int64) (GetJobRow, error)
 	GetVideo(ctx context.Context, onlineVideoID string) (GetVideoRow, error)
+	GetVideoJobs(ctx context.Context, videoID int64) ([]GetVideoJobsRow, error)
 	MarkJobDone(ctx context.Context, arg MarkJobDoneParams) (int64, error)
 	MarkJobFailed(ctx context.Context, arg MarkJobFailedParams) (int64, error)
 	UnlockJob(ctx context.Context, arg UnlockJobParams) (int64, error)

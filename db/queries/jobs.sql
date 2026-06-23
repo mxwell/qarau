@@ -9,6 +9,15 @@ SELECT
 FROM jobs
 WHERE id = sqlc.arg('job_id');
 
+-- name: GetVideoJobs :many
+SELECT
+    id,
+    state,
+    type
+FROM jobs
+WHERE
+    video_id = sqlc.arg('video_id');
+
 -- name: ClaimJob :one
 UPDATE jobs SET
     state = 'running',

@@ -12,6 +12,7 @@ import (
 
 var (
 	ErrCorruptedData = errors.New("corrupted data")
+	ErrNoVideoJobs   = errors.New("no jobs for video")
 )
 
 type VideoService struct {
@@ -119,6 +120,87 @@ func (s *VideoService) ProbeVideo(ctx context.Context, onlineVideoId string) (*V
 	s.log.Info("stored video to DB", "onlineVideoId", onlineVideoId, "ID", videoID)
 	video.ID = videoID
 	return video, nil
+}
+
+type VideoJob struct {
+	jobID int64
+	state dbgen.JobState
+}
+
+type VideoJobs struct {
+	fetch VideoJob
+	asr   VideoJob
+}
+
+type ProcessingState string
+
+const (
+	ProcessingStateNew     ProcessingState = "new"
+	ProcessingStatePending ProcessingState = "pending"
+	ProcessingStateRunning ProcessingState = "running"
+	ProcessingStateDone    ProcessingState = "done"
+	ProcessingStateFailed  ProcessingState = "failed"
+)
+
+func (jobs VideoJobs) GetProcessingState() ProcessingState {
+	if jobs.fetch.jobID == 0 {
+		return ProcessingStateNew
+	}
+	switch jobs.fetch.state {
+	case dbgen.JobStatePending:
+		return ProcessingStatePending
+	case dbgen.JobStateRunning:
+		return ProcessingStateRunning
+	case dbgen.JobStateDone:
+		if jobs.asr.jobID == 0 {
+			return ProcessingStateFailed
+		}
+		switch jobs.asr.state {
+		case dbgen.JobStateDone:
+			return ProcessingStateDone
+		case dbgen.JobStateFailed:
+			return ProcessingStateFailed
+		default:
+			return ProcessingStateRunning
+		}
+	default:
+		return ProcessingStateFailed
+	}
+}
+
+func (s *VideoService) GetVideoJobs(ctx context.Context, videoID int64) (VideoJobs, error) {
+	rows, err := s.queries.GetVideoJobs(ctx, videoID)
+	if err != nil {
+		return VideoJobs{}, err
+	}
+	if len(rows) > 2 {
+		s.log.Error("too many video jobs", "videoID", videoID, "jobs", len(rows))
+		return VideoJobs{}, ErrCorruptedData
+	}
+	var fetchJob VideoJob
+	var asrJob VideoJob
+	for _, row := range rows {
+		switch row.Type {
+		case dbgen.JobTypeFetch:
+			fetchJob = VideoJob{
+				jobID: row.ID,
+				state: row.State,
+			}
+		case dbgen.JobTypeAsr:
+			asrJob = VideoJob{
+				jobID: row.ID,
+				state: row.State,
+			}
+		default:
+			s.log.Error("unknown job type", "videoID", videoID, "jobID", row.ID, "type", row.Type)
+			return VideoJobs{}, ErrCorruptedData
+		}
+	}
+	s.log.Info("loaded video jobs", "videoID", videoID, "fetch", fetchJob.jobID, "fetch_state", fetchJob.state, "asr", asrJob.jobID, "asr_state", asrJob.state)
+	return VideoJobs{
+		fetch: fetchJob,
+		asr:   asrJob,
+	}, nil
 }
 
 func (s *VideoService) CreateFetchJob(ctx context.Context, videoID int64) (jobID int64, err error) {
