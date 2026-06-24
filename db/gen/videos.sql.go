@@ -126,3 +126,57 @@ func (q *Queries) GetVideo(ctx context.Context, onlineVideoID string) (GetVideoR
 	)
 	return i, err
 }
+
+const getVideoByID = `-- name: GetVideoByID :one
+SELECT
+    id,
+    online_video_id,
+    title,
+    channel_id,
+    channel_title,
+    published_at,
+    duration,
+    default_lang,
+    embeddable,
+    thumbnail_url,
+    thumbnail_width,
+    thumbnail_height
+FROM videos
+WHERE id = $1
+LIMIT 1
+`
+
+type GetVideoByIDRow struct {
+	ID              int64              `json:"id"`
+	OnlineVideoID   string             `json:"online_video_id"`
+	Title           string             `json:"title"`
+	ChannelID       string             `json:"channel_id"`
+	ChannelTitle    string             `json:"channel_title"`
+	PublishedAt     pgtype.Timestamptz `json:"published_at"`
+	Duration        pgtype.Interval    `json:"duration"`
+	DefaultLang     *string            `json:"default_lang"`
+	Embeddable      bool               `json:"embeddable"`
+	ThumbnailUrl    *string            `json:"thumbnail_url"`
+	ThumbnailWidth  *int32             `json:"thumbnail_width"`
+	ThumbnailHeight *int32             `json:"thumbnail_height"`
+}
+
+func (q *Queries) GetVideoByID(ctx context.Context, videoID int64) (GetVideoByIDRow, error) {
+	row := q.db.QueryRow(ctx, getVideoByID, videoID)
+	var i GetVideoByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.OnlineVideoID,
+		&i.Title,
+		&i.ChannelID,
+		&i.ChannelTitle,
+		&i.PublishedAt,
+		&i.Duration,
+		&i.DefaultLang,
+		&i.Embeddable,
+		&i.ThumbnailUrl,
+		&i.ThumbnailWidth,
+		&i.ThumbnailHeight,
+	)
+	return i, err
+}

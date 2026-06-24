@@ -18,6 +18,18 @@ FROM jobs
 WHERE
     video_id = sqlc.arg('video_id');
 
+-- name: CreateFetchJob :one
+INSERT INTO jobs (
+    video_id,
+    type,
+    online_video_id
+) VALUES (
+    sqlc.arg('video_id'),
+    'fetch',
+    sqlc.arg('online_video_id')
+)
+RETURNING id;
+
 -- name: ClaimJob :one
 UPDATE jobs SET
     state = 'running',

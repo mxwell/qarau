@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 
 	"github.com/jackc/pgx/v5"
@@ -11,8 +12,8 @@ import (
 )
 
 var (
-	ErrCorruptedData = errors.New("corrupted data")
-	ErrNoVideoJobs   = errors.New("no jobs for video")
+	ErrCorruptedData      = errors.New("corrupted data")
+	ErrUnprocessableVideo = errors.New("unprocessable video")
 )
 
 type VideoService struct {
@@ -41,6 +42,35 @@ func NewVideoService(log *slog.Logger, queries *dbgen.Queries, ytClient *YtClien
 const microsecondsPerSecond = 1_000_000
 
 func rowToVideo(row *dbgen.GetVideoRow) (*Video, error) {
+	if row.DefaultLang == nil {
+		return nil, ErrCorruptedData
+	}
+	if row.ThumbnailUrl == nil {
+		return nil, ErrCorruptedData
+	}
+	if row.ThumbnailWidth == nil {
+		return nil, ErrCorruptedData
+	}
+	if row.ThumbnailHeight == nil {
+		return nil, ErrCorruptedData
+	}
+	return &Video{
+		ID:              row.ID,
+		OnlineVideoID:   row.OnlineVideoID,
+		Title:           row.Title,
+		ChannelID:       row.ChannelID,
+		ChannelTitle:    row.ChannelTitle,
+		PublishedAt:     row.PublishedAt.Time,
+		DurationSecs:    int(row.Duration.Microseconds / microsecondsPerSecond),
+		DefaultLang:     *row.DefaultLang,
+		Embeddable:      row.Embeddable,
+		ThumbnailURL:    *row.ThumbnailUrl,
+		ThumbnailWidth:  *row.ThumbnailWidth,
+		ThumbnailHeight: *row.ThumbnailHeight,
+	}, nil
+}
+
+func byIDRowToVideo(row *dbgen.GetVideoByIDRow) (*Video, error) {
 	if row.DefaultLang == nil {
 		return nil, ErrCorruptedData
 	}
@@ -203,7 +233,51 @@ func (s *VideoService) GetVideoJobs(ctx context.Context, videoID int64) (VideoJo
 	}, nil
 }
 
-func (s *VideoService) CreateFetchJob(ctx context.Context, videoID int64) (jobID int64, err error) {
-	// TODO
-	return 0, nil
+func (s *VideoService) CreateOrGetVideoJobs(ctx context.Context, videoID int64) (VideoJobs, error) {
+	existingJobs, err := s.GetVideoJobs(ctx, videoID)
+	if err != nil {
+		s.log.Error("failed to load existing jobs", "videoID", videoID, "err", err)
+		return VideoJobs{}, err
+	}
+
+	if existingJobs.GetProcessingState() != ProcessingStateNew {
+		return existingJobs, nil
+	}
+
+	byIDRow, err := s.queries.GetVideoByID(ctx, videoID)
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return VideoJobs{}, fmt.Errorf("video load fail: %w", err)
+		}
+		return VideoJobs{}, ErrNoSuchVideo
+	}
+
+	video, err := byIDRowToVideo(&byIDRow)
+	if err != nil {
+		s.log.Error("loaded video convert fail", "videoID", videoID, "err", err)
+		return VideoJobs{}, err
+	}
+
+	obstacle := video.ProcessingObstacle()
+	if obstacle != "" {
+		s.log.Error("not allowed to process video", "videoID", videoID, "obstacle", obstacle)
+		return VideoJobs{}, ErrUnprocessableVideo
+	}
+
+	// XXX one of concurrent inserts will fail with a conflict (unique constraint for video_id + type)
+	fetchJobID, err := s.queries.CreateFetchJob(ctx, dbgen.CreateFetchJobParams{
+		VideoID:       videoID,
+		OnlineVideoID: video.OnlineVideoID,
+	})
+	if err != nil {
+		s.log.Error("failed to create fetch job", "videoID", videoID, "err", err)
+		return VideoJobs{}, err
+	}
+
+	return VideoJobs{
+		fetch: VideoJob{
+			jobID: fetchJobID,
+			state: dbgen.JobStatePending,
+		},
+	}, nil
 }

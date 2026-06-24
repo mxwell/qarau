@@ -69,6 +69,31 @@ func (q *Queries) CreateAsrJob(ctx context.Context, fetchJobID int64) (int64, er
 	return id, err
 }
 
+const createFetchJob = `-- name: CreateFetchJob :one
+INSERT INTO jobs (
+    video_id,
+    type,
+    online_video_id
+) VALUES (
+    $1,
+    'fetch',
+    $2
+)
+RETURNING id
+`
+
+type CreateFetchJobParams struct {
+	VideoID       int64  `json:"video_id"`
+	OnlineVideoID string `json:"online_video_id"`
+}
+
+func (q *Queries) CreateFetchJob(ctx context.Context, arg CreateFetchJobParams) (int64, error) {
+	row := q.db.QueryRow(ctx, createFetchJob, arg.VideoID, arg.OnlineVideoID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getJob = `-- name: GetJob :one
 SELECT
     id,
@@ -112,7 +137,6 @@ SELECT
 FROM jobs
 WHERE
     video_id = $1
-LIMIT 3
 `
 
 type GetVideoJobsRow struct {
