@@ -69,7 +69,7 @@ func (q *Queries) CreateAsrJob(ctx context.Context, fetchJobID int64) (int64, er
 	return id, err
 }
 
-const createFetchJob = `-- name: CreateFetchJob :one
+const createFetchJobIfAbsent = `-- name: CreateFetchJobIfAbsent :one
 INSERT INTO jobs (
     video_id,
     type,
@@ -79,16 +79,17 @@ INSERT INTO jobs (
     'fetch',
     $2
 )
+ON CONFLICT (video_id, type) DO NOTHING
 RETURNING id
 `
 
-type CreateFetchJobParams struct {
+type CreateFetchJobIfAbsentParams struct {
 	VideoID       int64  `json:"video_id"`
 	OnlineVideoID string `json:"online_video_id"`
 }
 
-func (q *Queries) CreateFetchJob(ctx context.Context, arg CreateFetchJobParams) (int64, error) {
-	row := q.db.QueryRow(ctx, createFetchJob, arg.VideoID, arg.OnlineVideoID)
+func (q *Queries) CreateFetchJobIfAbsent(ctx context.Context, arg CreateFetchJobIfAbsentParams) (int64, error) {
+	row := q.db.QueryRow(ctx, createFetchJobIfAbsent, arg.VideoID, arg.OnlineVideoID)
 	var id int64
 	err := row.Scan(&id)
 	return id, err

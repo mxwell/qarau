@@ -18,7 +18,7 @@ FROM jobs
 WHERE
     video_id = sqlc.arg('video_id');
 
--- name: CreateFetchJob :one
+-- name: CreateFetchJobIfAbsent :one
 INSERT INTO jobs (
     video_id,
     type,
@@ -28,6 +28,7 @@ INSERT INTO jobs (
     'fetch',
     sqlc.arg('online_video_id')
 )
+ON CONFLICT (video_id, type) DO NOTHING
 RETURNING id;
 
 -- name: ClaimJob :one

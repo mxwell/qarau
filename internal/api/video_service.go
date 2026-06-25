@@ -264,14 +264,28 @@ func (s *VideoService) CreateOrGetVideoJobs(ctx context.Context, videoID int64) 
 		return VideoJobs{}, ErrUnprocessableVideo
 	}
 
-	// XXX one of concurrent inserts will fail with a conflict (unique constraint for video_id + type)
-	fetchJobID, err := s.queries.CreateFetchJob(ctx, dbgen.CreateFetchJobParams{
+	fetchJobID, err := s.queries.CreateFetchJobIfAbsent(ctx, dbgen.CreateFetchJobIfAbsentParams{
 		VideoID:       videoID,
 		OnlineVideoID: video.OnlineVideoID,
 	})
 	if err != nil {
-		s.log.Error("failed to create fetch job", "videoID", videoID, "err", err)
-		return VideoJobs{}, err
+		if !errors.Is(err, pgx.ErrNoRows) {
+			s.log.Error("failed to create fetch job", "videoID", videoID, "err", err)
+			return VideoJobs{}, err
+		}
+		// If pgx.ErrNoRows, then probably a concurrent insert succeeded first.
+		s.log.Warn("job insert returned nothing probably because conflict", "videoID", videoID)
+		alreadyExisting, readErr := s.GetVideoJobs(ctx, videoID)
+		if readErr != nil {
+			s.log.Error("re-read after insert fail failed too", "videoID", videoID, "readErr", readErr)
+			return VideoJobs{}, readErr
+		}
+		if alreadyExisting.GetProcessingState() == ProcessingStateNew {
+			s.log.Error("re-read after insert fail returned no jobs", "videoID", videoID)
+			return VideoJobs{}, err
+		}
+		s.log.Info("successful re-read after insert fail", "videoID", videoID, "fetch.jobID", alreadyExisting.fetch.jobID)
+		return alreadyExisting, nil
 	}
 
 	return VideoJobs{

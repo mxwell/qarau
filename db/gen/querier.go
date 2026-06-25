@@ -12,7 +12,7 @@ type Querier interface {
 	ClaimJob(ctx context.Context, arg ClaimJobParams) (ClaimJobRow, error)
 	CreateAsrJob(ctx context.Context, fetchJobID int64) (int64, error)
 	CreateAudioBlob(ctx context.Context, arg CreateAudioBlobParams) (int64, error)
-	CreateFetchJob(ctx context.Context, arg CreateFetchJobParams) (int64, error)
+	CreateFetchJobIfAbsent(ctx context.Context, arg CreateFetchJobIfAbsentParams) (int64, error)
 	CreateVideo(ctx context.Context, arg CreateVideoParams) (int64, error)
 	GetJob(ctx context.Context, jobID int64) (GetJobRow, error)
 	GetVideo(ctx context.Context, onlineVideoID string) (GetVideoRow, error)
