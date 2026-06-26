@@ -19,9 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	JobService_LeaseJob_FullMethodName      = "/qarau.v1.JobService/LeaseJob"
-	JobService_CompleteFetch_FullMethodName = "/qarau.v1.JobService/CompleteFetch"
-	JobService_FailJob_FullMethodName       = "/qarau.v1.JobService/FailJob"
+	JobService_LeaseJob_FullMethodName        = "/qarau.v1.JobService/LeaseJob"
+	JobService_CompleteFetch_FullMethodName   = "/qarau.v1.JobService/CompleteFetch"
+	JobService_GetFetchedAudio_FullMethodName = "/qarau.v1.JobService/GetFetchedAudio"
+	JobService_FailJob_FullMethodName         = "/qarau.v1.JobService/FailJob"
 )
 
 // JobServiceClient is the client API for JobService service.
@@ -35,6 +36,7 @@ type JobServiceClient interface {
 	// LeaseJob claims the oldest claimable job of the given type (SKIP LOCKED).
 	LeaseJob(ctx context.Context, in *LeaseJobRequest, opts ...grpc.CallOption) (*LeaseJobResponse, error)
 	CompleteFetch(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[CompleteFetchRequest, CompleteFetchResponse], error)
+	GetFetchedAudio(ctx context.Context, in *GetFetchedAudioRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[GetFetchedAudioResponse], error)
 	FailJob(ctx context.Context, in *FailJobRequest, opts ...grpc.CallOption) (*FailJobResponse, error)
 }
 
@@ -69,6 +71,25 @@ func (c *jobServiceClient) CompleteFetch(ctx context.Context, opts ...grpc.CallO
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type JobService_CompleteFetchClient = grpc.ClientStreamingClient[CompleteFetchRequest, CompleteFetchResponse]
 
+func (c *jobServiceClient) GetFetchedAudio(ctx context.Context, in *GetFetchedAudioRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[GetFetchedAudioResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &JobService_ServiceDesc.Streams[1], JobService_GetFetchedAudio_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[GetFetchedAudioRequest, GetFetchedAudioResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type JobService_GetFetchedAudioClient = grpc.ServerStreamingClient[GetFetchedAudioResponse]
+
 func (c *jobServiceClient) FailJob(ctx context.Context, in *FailJobRequest, opts ...grpc.CallOption) (*FailJobResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(FailJobResponse)
@@ -90,6 +111,7 @@ type JobServiceServer interface {
 	// LeaseJob claims the oldest claimable job of the given type (SKIP LOCKED).
 	LeaseJob(context.Context, *LeaseJobRequest) (*LeaseJobResponse, error)
 	CompleteFetch(grpc.ClientStreamingServer[CompleteFetchRequest, CompleteFetchResponse]) error
+	GetFetchedAudio(*GetFetchedAudioRequest, grpc.ServerStreamingServer[GetFetchedAudioResponse]) error
 	FailJob(context.Context, *FailJobRequest) (*FailJobResponse, error)
 	mustEmbedUnimplementedJobServiceServer()
 }
@@ -106,6 +128,9 @@ func (UnimplementedJobServiceServer) LeaseJob(context.Context, *LeaseJobRequest)
 }
 func (UnimplementedJobServiceServer) CompleteFetch(grpc.ClientStreamingServer[CompleteFetchRequest, CompleteFetchResponse]) error {
 	return status.Error(codes.Unimplemented, "method CompleteFetch not implemented")
+}
+func (UnimplementedJobServiceServer) GetFetchedAudio(*GetFetchedAudioRequest, grpc.ServerStreamingServer[GetFetchedAudioResponse]) error {
+	return status.Error(codes.Unimplemented, "method GetFetchedAudio not implemented")
 }
 func (UnimplementedJobServiceServer) FailJob(context.Context, *FailJobRequest) (*FailJobResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method FailJob not implemented")
@@ -156,6 +181,17 @@ func _JobService_CompleteFetch_Handler(srv interface{}, stream grpc.ServerStream
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type JobService_CompleteFetchServer = grpc.ClientStreamingServer[CompleteFetchRequest, CompleteFetchResponse]
 
+func _JobService_GetFetchedAudio_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(GetFetchedAudioRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(JobServiceServer).GetFetchedAudio(m, &grpc.GenericServerStream[GetFetchedAudioRequest, GetFetchedAudioResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type JobService_GetFetchedAudioServer = grpc.ServerStreamingServer[GetFetchedAudioResponse]
+
 func _JobService_FailJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(FailJobRequest)
 	if err := dec(in); err != nil {
@@ -195,6 +231,11 @@ var JobService_ServiceDesc = grpc.ServiceDesc{
 			StreamName:    "CompleteFetch",
 			Handler:       _JobService_CompleteFetch_Handler,
 			ClientStreams: true,
+		},
+		{
+			StreamName:    "GetFetchedAudio",
+			Handler:       _JobService_GetFetchedAudio_Handler,
+			ServerStreams: true,
 		},
 	},
 	Metadata: "qarau/v1/job_service.proto",

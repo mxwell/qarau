@@ -24,30 +24,35 @@ var File_qarau_v1_job_service_proto protoreflect.FileDescriptor
 
 const file_qarau_v1_job_service_proto_rawDesc = "" +
 	"\n" +
-	"\x1aqarau/v1/job_service.proto\x12\bqarau.v1\x1a%qarau/v1/complete_fetch_request.proto\x1a&qarau/v1/complete_fetch_response.proto\x1a\x1fqarau/v1/fail_job_request.proto\x1a qarau/v1/fail_job_response.proto\x1a qarau/v1/lease_job_request.proto\x1a!qarau/v1/lease_job_response.proto2\xe3\x01\n" +
+	"\x1aqarau/v1/job_service.proto\x12\bqarau.v1\x1a%qarau/v1/complete_fetch_request.proto\x1a&qarau/v1/complete_fetch_response.proto\x1a\x1fqarau/v1/fail_job_request.proto\x1a qarau/v1/fail_job_response.proto\x1a(qarau/v1/get_fetched_audio_request.proto\x1a)qarau/v1/get_fetched_audio_response.proto\x1a qarau/v1/lease_job_request.proto\x1a!qarau/v1/lease_job_response.proto2\xbd\x02\n" +
 	"\n" +
 	"JobService\x12A\n" +
 	"\bLeaseJob\x12\x19.qarau.v1.LeaseJobRequest\x1a\x1a.qarau.v1.LeaseJobResponse\x12R\n" +
-	"\rCompleteFetch\x12\x1e.qarau.v1.CompleteFetchRequest\x1a\x1f.qarau.v1.CompleteFetchResponse(\x01\x12>\n" +
+	"\rCompleteFetch\x12\x1e.qarau.v1.CompleteFetchRequest\x1a\x1f.qarau.v1.CompleteFetchResponse(\x01\x12X\n" +
+	"\x0fGetFetchedAudio\x12 .qarau.v1.GetFetchedAudioRequest\x1a!.qarau.v1.GetFetchedAudioResponse0\x01\x12>\n" +
 	"\aFailJob\x12\x18.qarau.v1.FailJobRequest\x1a\x19.qarau.v1.FailJobResponseB.Z,github.com/mxwell/qarau/gen/qarau/v1;qarauv1b\x06proto3"
 
 var file_qarau_v1_job_service_proto_goTypes = []any{
-	(*LeaseJobRequest)(nil),       // 0: qarau.v1.LeaseJobRequest
-	(*CompleteFetchRequest)(nil),  // 1: qarau.v1.CompleteFetchRequest
-	(*FailJobRequest)(nil),        // 2: qarau.v1.FailJobRequest
-	(*LeaseJobResponse)(nil),      // 3: qarau.v1.LeaseJobResponse
-	(*CompleteFetchResponse)(nil), // 4: qarau.v1.CompleteFetchResponse
-	(*FailJobResponse)(nil),       // 5: qarau.v1.FailJobResponse
+	(*LeaseJobRequest)(nil),         // 0: qarau.v1.LeaseJobRequest
+	(*CompleteFetchRequest)(nil),    // 1: qarau.v1.CompleteFetchRequest
+	(*GetFetchedAudioRequest)(nil),  // 2: qarau.v1.GetFetchedAudioRequest
+	(*FailJobRequest)(nil),          // 3: qarau.v1.FailJobRequest
+	(*LeaseJobResponse)(nil),        // 4: qarau.v1.LeaseJobResponse
+	(*CompleteFetchResponse)(nil),   // 5: qarau.v1.CompleteFetchResponse
+	(*GetFetchedAudioResponse)(nil), // 6: qarau.v1.GetFetchedAudioResponse
+	(*FailJobResponse)(nil),         // 7: qarau.v1.FailJobResponse
 }
 var file_qarau_v1_job_service_proto_depIdxs = []int32{
 	0, // 0: qarau.v1.JobService.LeaseJob:input_type -> qarau.v1.LeaseJobRequest
 	1, // 1: qarau.v1.JobService.CompleteFetch:input_type -> qarau.v1.CompleteFetchRequest
-	2, // 2: qarau.v1.JobService.FailJob:input_type -> qarau.v1.FailJobRequest
-	3, // 3: qarau.v1.JobService.LeaseJob:output_type -> qarau.v1.LeaseJobResponse
-	4, // 4: qarau.v1.JobService.CompleteFetch:output_type -> qarau.v1.CompleteFetchResponse
-	5, // 5: qarau.v1.JobService.FailJob:output_type -> qarau.v1.FailJobResponse
-	3, // [3:6] is the sub-list for method output_type
-	0, // [0:3] is the sub-list for method input_type
+	2, // 2: qarau.v1.JobService.GetFetchedAudio:input_type -> qarau.v1.GetFetchedAudioRequest
+	3, // 3: qarau.v1.JobService.FailJob:input_type -> qarau.v1.FailJobRequest
+	4, // 4: qarau.v1.JobService.LeaseJob:output_type -> qarau.v1.LeaseJobResponse
+	5, // 5: qarau.v1.JobService.CompleteFetch:output_type -> qarau.v1.CompleteFetchResponse
+	6, // 6: qarau.v1.JobService.GetFetchedAudio:output_type -> qarau.v1.GetFetchedAudioResponse
+	7, // 7: qarau.v1.JobService.FailJob:output_type -> qarau.v1.FailJobResponse
+	4, // [4:8] is the sub-list for method output_type
+	0, // [0:4] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
@@ -62,6 +67,8 @@ func file_qarau_v1_job_service_proto_init() {
 	file_qarau_v1_complete_fetch_response_proto_init()
 	file_qarau_v1_fail_job_request_proto_init()
 	file_qarau_v1_fail_job_response_proto_init()
+	file_qarau_v1_get_fetched_audio_request_proto_init()
+	file_qarau_v1_get_fetched_audio_response_proto_init()
 	file_qarau_v1_lease_job_request_proto_init()
 	file_qarau_v1_lease_job_response_proto_init()
 	type x struct{}

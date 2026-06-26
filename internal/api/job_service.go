@@ -49,7 +49,8 @@ func convertJobType(protoJobType qarauv1.JobType) (dbgen.JobType, error) {
 }
 
 func prepareJobPayload(jobType qarauv1.JobType, row dbgen.ClaimJobRow) (*qarauv1.JobPayload, error) {
-	if jobType == qarauv1.JobType_JOB_TYPE_FETCH {
+	switch jobType {
+	case qarauv1.JobType_JOB_TYPE_FETCH:
 		return &qarauv1.JobPayload{
 			Payload: &qarauv1.JobPayload_FetchJob{
 				FetchJob: &qarauv1.FetchJob{
@@ -57,19 +58,20 @@ func prepareJobPayload(jobType qarauv1.JobType, row dbgen.ClaimJobRow) (*qarauv1
 				},
 			},
 		}, nil
+	case qarauv1.JobType_JOB_TYPE_ASR:
+		return &qarauv1.JobPayload{
+			Payload: &qarauv1.JobPayload_AsrJob{
+				AsrJob: &qarauv1.AsrJob{},
+			},
+		}, nil
+	default:
+		return nil, fmt.Errorf("payload for job type %v not supported", jobType)
 	}
-	// TODO support ASR jobs
-	return nil, fmt.Errorf("payload for job type %v not supported", jobType)
 }
 
 func (s *JobService) LeaseJob(ctx context.Context, request *qarauv1.LeaseJobRequest) (*qarauv1.LeaseJobResponse, error) {
 	if len(request.WorkerId) == 0 {
 		return nil, errors.New("empty worker ID")
-	}
-
-	// TODO support ASR jobs
-	if request.Type != qarauv1.JobType_JOB_TYPE_FETCH {
-		return nil, errors.ErrUnsupported
 	}
 
 	jobType, err := convertJobType(request.Type)
@@ -79,7 +81,7 @@ func (s *JobService) LeaseJob(ctx context.Context, request *qarauv1.LeaseJobRequ
 
 	lockPeriod := 5 * time.Minute
 	if jobType == dbgen.JobTypeAsr {
-		lockPeriod = 15 * time.Minute
+		lockPeriod = 60 * time.Minute
 	}
 
 	lockedUntil := pgtype.Timestamptz{
@@ -116,7 +118,7 @@ func (s *JobService) LeaseJob(ctx context.Context, request *qarauv1.LeaseJobRequ
 /*
  * The method does 3 things under 1 transaction: creates a new audio blob, marks the fetch job done and creates a new ASR job
  */
-func (s *JobService) CompleteFetchJob(ctx context.Context, workerID string, jobID int64, audio []byte, filename string) error {
+func (s *JobService) CompleteFetchJob(ctx context.Context, workerID string, jobID int64, videoID int64, audio []byte, filename string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -126,7 +128,7 @@ func (s *JobService) CompleteFetchJob(ctx context.Context, workerID string, jobI
 	qtx := s.queries.WithTx(tx)
 
 	_, err = qtx.CreateAudioBlob(ctx, dbgen.CreateAudioBlobParams{
-		JobID:    jobID,
+		VideoID:  videoID,
 		Content:  audio,
 		Filename: filename,
 	})
@@ -150,6 +152,49 @@ func (s *JobService) CompleteFetchJob(ctx context.Context, workerID string, jobI
 	}
 
 	return tx.Commit(ctx)
+}
+
+/*
+ * Check that the job is actually locked by the given worker and the lock hasn't expired
+ */
+func (s *JobService) CheckLease(ctx context.Context, jobID int64, workerID string) bool {
+	row, err := s.queries.CheckLease(ctx, jobID)
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			s.log.Error("failed to check lease in DB", "job", jobID, "err", err)
+		}
+		return false
+	}
+	if *row.LockedBy != workerID {
+		s.log.Info("lease owner mismatch", "job", jobID, "locked_by", *row.LockedBy, "workerID", workerID)
+		return false
+	}
+	if row.LockedUntil.Time.Before(time.Now()) {
+		s.log.Info("lease expired", "job", jobID, "locked_until", row.LockedUntil.Time)
+		return false
+	}
+	if row.State != dbgen.JobStateRunning {
+		s.log.Info("lease not valid as job not running", "job", jobID, "state", row.State)
+		return false
+	}
+	return true
+}
+
+type AudioBlobContent struct {
+	Filename string
+	Content  []byte
+}
+
+func (s *JobService) GetAudioBlob(ctx context.Context, videoID int64) (AudioBlobContent, error) {
+	row, err := s.queries.GetAudioBlob(ctx, videoID)
+	if err != nil {
+		s.log.Error("failed to load audio blob", "videoID", videoID, "err", err)
+		return AudioBlobContent{}, err
+	}
+	return AudioBlobContent{
+		Filename: row.Filename,
+		Content:  row.Content,
+	}, nil
 }
 
 func (s *JobService) FailJob(ctx context.Context, jobID int64, workerID string, errorMessage string) error {

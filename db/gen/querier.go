@@ -9,11 +9,13 @@ import (
 )
 
 type Querier interface {
+	CheckLease(ctx context.Context, jobID int64) (CheckLeaseRow, error)
 	ClaimJob(ctx context.Context, arg ClaimJobParams) (ClaimJobRow, error)
 	CreateAsrJob(ctx context.Context, fetchJobID int64) (int64, error)
 	CreateAudioBlob(ctx context.Context, arg CreateAudioBlobParams) (int64, error)
 	CreateFetchJobIfAbsent(ctx context.Context, arg CreateFetchJobIfAbsentParams) (int64, error)
 	CreateVideo(ctx context.Context, arg CreateVideoParams) (int64, error)
+	GetAudioBlob(ctx context.Context, videoID int64) (GetAudioBlobRow, error)
 	GetJob(ctx context.Context, jobID int64) (GetJobRow, error)
 	GetVideo(ctx context.Context, onlineVideoID string) (GetVideoRow, error)
 	GetVideoByID(ctx context.Context, videoID int64) (GetVideoByIDRow, error)

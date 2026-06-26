@@ -98,7 +98,7 @@ func (ns NullJobType) Value() (driver.Value, error) {
 }
 
 type AudioBlob struct {
-	JobID     int64              `json:"job_id"`
+	VideoID   int64              `json:"video_id"`
 	Content   []byte             `json:"content"`
 	Filename  string             `json:"filename"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`

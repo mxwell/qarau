@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package qarau.v1;
+
+option go_package = "github.com/mxwell/qarau/gen/qarau/v1;qarauv1";
+
+message GetFetchedAudioRequest {
+    string worker_id = 1; // worker instance id, e.g. "asr-pod-abc"
+    int64 job_id = 2;  // to confirm a lease
+    int64 video_id = 3;  // audio blobs are keyed by video_id
+}

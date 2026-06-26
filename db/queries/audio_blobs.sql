@@ -1,11 +1,18 @@
 -- name: CreateAudioBlob :one
 INSERT INTO audio_blobs (
-    job_id,
+    video_id,
     content,
     filename
 ) VALUES (
-    sqlc.arg('job_id'),
+    sqlc.arg('video_id'),
     sqlc.arg('content'),
     sqlc.arg('filename')
 )
-RETURNING job_id;
+RETURNING video_id;
+
+-- name: GetAudioBlob :one
+SELECT
+    content,
+    filename
+FROM audio_blobs
+WHERE video_id = sqlc.arg('video_id');

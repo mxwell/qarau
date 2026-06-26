@@ -51,6 +51,14 @@ WHERE id = (
 )
 RETURNING id, video_id, online_video_id;
 
+-- name: CheckLease :one
+SELECT
+    state,
+    locked_by,
+    locked_until
+FROM jobs
+WHERE id = sqlc.arg('job_id');
+
 -- name: MarkJobDone :one
 UPDATE jobs SET
     state = 'done',

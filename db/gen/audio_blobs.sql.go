@@ -11,7 +11,7 @@ import (
 
 const createAudioBlob = `-- name: CreateAudioBlob :one
 INSERT INTO audio_blobs (
-    job_id,
+    video_id,
     content,
     filename
 ) VALUES (
@@ -19,18 +19,38 @@ INSERT INTO audio_blobs (
     $2,
     $3
 )
-RETURNING job_id
+RETURNING video_id
 `
 
 type CreateAudioBlobParams struct {
-	JobID    int64  `json:"job_id"`
+	VideoID  int64  `json:"video_id"`
 	Content  []byte `json:"content"`
 	Filename string `json:"filename"`
 }
 
 func (q *Queries) CreateAudioBlob(ctx context.Context, arg CreateAudioBlobParams) (int64, error) {
-	row := q.db.QueryRow(ctx, createAudioBlob, arg.JobID, arg.Content, arg.Filename)
-	var job_id int64
-	err := row.Scan(&job_id)
-	return job_id, err
+	row := q.db.QueryRow(ctx, createAudioBlob, arg.VideoID, arg.Content, arg.Filename)
+	var video_id int64
+	err := row.Scan(&video_id)
+	return video_id, err
+}
+
+const getAudioBlob = `-- name: GetAudioBlob :one
+SELECT
+    content,
+    filename
+FROM audio_blobs
+WHERE video_id = $1
+`
+
+type GetAudioBlobRow struct {
+	Content  []byte `json:"content"`
+	Filename string `json:"filename"`
+}
+
+func (q *Queries) GetAudioBlob(ctx context.Context, videoID int64) (GetAudioBlobRow, error) {
+	row := q.db.QueryRow(ctx, getAudioBlob, videoID)
+	var i GetAudioBlobRow
+	err := row.Scan(&i.Content, &i.Filename)
+	return i, err
 }

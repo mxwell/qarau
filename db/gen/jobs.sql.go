@@ -11,6 +11,28 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const checkLease = `-- name: CheckLease :one
+SELECT
+    state,
+    locked_by,
+    locked_until
+FROM jobs
+WHERE id = $1
+`
+
+type CheckLeaseRow struct {
+	State       JobState           `json:"state"`
+	LockedBy    *string            `json:"locked_by"`
+	LockedUntil pgtype.Timestamptz `json:"locked_until"`
+}
+
+func (q *Queries) CheckLease(ctx context.Context, jobID int64) (CheckLeaseRow, error) {
+	row := q.db.QueryRow(ctx, checkLease, jobID)
+	var i CheckLeaseRow
+	err := row.Scan(&i.State, &i.LockedBy, &i.LockedUntil)
+	return i, err
+}
+
 const claimJob = `-- name: ClaimJob :one
 UPDATE jobs SET
     state = 'running',

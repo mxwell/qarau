@@ -8,6 +8,8 @@ import "qarau/v1/complete_fetch_request.proto";
 import "qarau/v1/complete_fetch_response.proto";
 import "qarau/v1/fail_job_request.proto";
 import "qarau/v1/fail_job_response.proto";
+import "qarau/v1/get_fetched_audio_request.proto";
+import "qarau/v1/get_fetched_audio_response.proto";
 import "qarau/v1/lease_job_request.proto";
 import "qarau/v1/lease_job_response.proto";
 
@@ -19,6 +21,8 @@ service JobService {
     rpc LeaseJob(LeaseJobRequest) returns (LeaseJobResponse);
 
     rpc CompleteFetch(stream CompleteFetchRequest) returns (CompleteFetchResponse);
+
+    rpc GetFetchedAudio(GetFetchedAudioRequest) returns (stream GetFetchedAudioResponse);
 
     rpc FailJob(FailJobRequest) returns (FailJobResponse);
 }

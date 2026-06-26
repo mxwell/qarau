@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package qarau.v1;
+
+option go_package = "github.com/mxwell/qarau/gen/qarau/v1;qarauv1";
+
+message GetFetchedAudioResponse {
+    oneof msg {
+        FetchedAudioMeta meta = 1;  // meta should arrive before any chunks
+        FetchedAudioChunk chunk = 2;
+    }
+}
+
+message FetchedAudioMeta {
+    string filename = 1;
+    int64 length = 2;
+}
+
+message FetchedAudioChunk {
+    int64 offset = 1;
+    bytes content = 2;
+    uint32 crc32 = 3;
+}

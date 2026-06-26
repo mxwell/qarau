@@ -26,6 +26,7 @@ type JobPayload struct {
 	// Types that are valid to be assigned to Payload:
 	//
 	//	*JobPayload_FetchJob
+	//	*JobPayload_AsrJob
 	Payload       isJobPayload_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -77,6 +78,15 @@ func (x *JobPayload) GetFetchJob() *FetchJob {
 	return nil
 }
 
+func (x *JobPayload) GetAsrJob() *AsrJob {
+	if x != nil {
+		if x, ok := x.Payload.(*JobPayload_AsrJob); ok {
+			return x.AsrJob
+		}
+	}
+	return nil
+}
+
 type isJobPayload_Payload interface {
 	isJobPayload_Payload()
 }
@@ -85,16 +95,23 @@ type JobPayload_FetchJob struct {
 	FetchJob *FetchJob `protobuf:"bytes,1,opt,name=fetch_job,json=fetchJob,proto3,oneof"`
 }
 
+type JobPayload_AsrJob struct {
+	AsrJob *AsrJob `protobuf:"bytes,2,opt,name=asr_job,json=asrJob,proto3,oneof"`
+}
+
 func (*JobPayload_FetchJob) isJobPayload_Payload() {}
+
+func (*JobPayload_AsrJob) isJobPayload_Payload() {}
 
 var File_qarau_v1_job_payload_proto protoreflect.FileDescriptor
 
 const file_qarau_v1_job_payload_proto_rawDesc = "" +
 	"\n" +
-	"\x1aqarau/v1/job_payload.proto\x12\bqarau.v1\x1a\x18qarau/v1/fetch_job.proto\"J\n" +
+	"\x1aqarau/v1/job_payload.proto\x12\bqarau.v1\x1a\x16qarau/v1/asr_job.proto\x1a\x18qarau/v1/fetch_job.proto\"w\n" +
 	"\n" +
 	"JobPayload\x121\n" +
-	"\tfetch_job\x18\x01 \x01(\v2\x12.qarau.v1.FetchJobH\x00R\bfetchJobB\t\n" +
+	"\tfetch_job\x18\x01 \x01(\v2\x12.qarau.v1.FetchJobH\x00R\bfetchJob\x12+\n" +
+	"\aasr_job\x18\x02 \x01(\v2\x10.qarau.v1.AsrJobH\x00R\x06asrJobB\t\n" +
 	"\apayloadB.Z,github.com/mxwell/qarau/gen/qarau/v1;qarauv1b\x06proto3"
 
 var (
@@ -113,14 +130,16 @@ var file_qarau_v1_job_payload_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_qarau_v1_job_payload_proto_goTypes = []any{
 	(*JobPayload)(nil), // 0: qarau.v1.JobPayload
 	(*FetchJob)(nil),   // 1: qarau.v1.FetchJob
+	(*AsrJob)(nil),     // 2: qarau.v1.AsrJob
 }
 var file_qarau_v1_job_payload_proto_depIdxs = []int32{
 	1, // 0: qarau.v1.JobPayload.fetch_job:type_name -> qarau.v1.FetchJob
-	1, // [1:1] is the sub-list for method output_type
-	1, // [1:1] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	2, // 1: qarau.v1.JobPayload.asr_job:type_name -> qarau.v1.AsrJob
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_qarau_v1_job_payload_proto_init() }
@@ -128,9 +147,11 @@ func file_qarau_v1_job_payload_proto_init() {
 	if File_qarau_v1_job_payload_proto != nil {
 		return
 	}
+	file_qarau_v1_asr_job_proto_init()
 	file_qarau_v1_fetch_job_proto_init()
 	file_qarau_v1_job_payload_proto_msgTypes[0].OneofWrappers = []any{
 		(*JobPayload_FetchJob)(nil),
+		(*JobPayload_AsrJob)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
