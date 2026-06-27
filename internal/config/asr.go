@@ -16,6 +16,7 @@ type ASRConfig struct {
 	APIHost    string
 	APIPort    uint16
 	WorkingDir string
+	FfmpegTool string
 	LogLevel   slog.Level
 }
 
@@ -44,6 +45,7 @@ func LoadASR() (ASRConfig, error) {
 		APIHost:    v.GetString("API_HOST"),
 		APIPort:    v.GetUint16("API_PORT"),
 		WorkingDir: v.GetString("WORKING_DIR"),
+		FfmpegTool: v.GetString("FFMPEG"),
 		LogLevel:   logLevel,
 	}
 
@@ -59,6 +61,9 @@ func LoadASR() (ASRConfig, error) {
 	}
 	if !filepath.IsAbs(cfg.WorkingDir) {
 		return ASRConfig{}, fmt.Errorf("ASR config error: invalid working dir '%v'", cfg.WorkingDir)
+	}
+	if !strings.HasPrefix(cfg.FfmpegTool, "/") {
+		return ASRConfig{}, fmt.Errorf("ASR config error: invalid ffmpeg path '%v'", cfg.FfmpegTool)
 	}
 
 	return cfg, nil

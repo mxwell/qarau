@@ -20,6 +20,7 @@ type ASRWorker struct {
 	workerID     string
 	workingDir   string
 	leaseRequest qarauv1.LeaseJobRequest
+	transcoder   Transcoder
 }
 
 const (
@@ -35,7 +36,7 @@ func (j claimedJob) GetID() int64 {
 	return j.jobID
 }
 
-func NewASRWorker(client qarauv1.JobServiceClient, logger *slog.Logger, workerID string, workingDir string) (*ASRWorker, error) {
+func NewASRWorker(client qarauv1.JobServiceClient, logger *slog.Logger, workerID string, workingDir string, transcoder Transcoder) (*ASRWorker, error) {
 	if client == nil {
 		return nil, errors.New("nil client in ASRWorker creation")
 	}
@@ -58,6 +59,7 @@ func NewASRWorker(client qarauv1.JobServiceClient, logger *slog.Logger, workerID
 			Type:     qarauv1.JobType_JOB_TYPE_ASR,
 			WorkerId: workerID,
 		},
+		transcoder: transcoder,
 	}, nil
 }
 
@@ -192,6 +194,40 @@ func (aw *ASRWorker) getFetchedAudio(ctx context.Context, job claimedJob) (strin
 	return path, nil
 }
 
+func (aw *ASRWorker) processAudio(ctx context.Context, job claimedJob, audioPath string) (err error) {
+	pcmPath := audioPath + ".pcm"
+	pcmFile, err := os.Create(pcmPath)
+	if err != nil {
+		aw.logger.Error("failed to create pcm file", "job", job.jobID, "err", err)
+		return err
+	}
+	defer pcmFile.Close()
+
+	reader, err := aw.transcoder.Transcode(ctx, audioPath)
+	if err != nil {
+		aw.logger.Error("transcoder failed", "job", job.jobID, "err", err)
+		return err
+	}
+	defer func() {
+		if cerr := reader.Close(); cerr != nil {
+			if ctx.Err() != nil {
+				aw.logger.Info("transcoding interrupted", "job", job.jobID, "cerr", cerr)
+			} else {
+				aw.logger.Error("transcoder close failed", "job", job.jobID, "cerr", cerr)
+			}
+			err = cerr
+		}
+	}()
+
+	copied, err := io.Copy(pcmFile, reader)
+	if err != nil {
+		aw.logger.Error("failed to copy PCM stream", "job", job.jobID, "err", err, "copied", copied)
+		return err
+	}
+	aw.logger.Info("copied PCM stream", "job", job.jobID, "copied", copied, "dst", pcmPath)
+	return err
+}
+
 func (aw *ASRWorker) Process(ctx context.Context, job claimedJob) error {
 	// TODO cleanup file
 	audioPath, err := aw.getFetchedAudio(ctx, job)
@@ -200,8 +236,11 @@ func (aw *ASRWorker) Process(ctx context.Context, job claimedJob) error {
 		// TODO unlock the job
 		return nil
 	}
-	aw.logger.Info("see file", "path", audioPath)
-	// TODO asr and submit results
+	if err := aw.processAudio(ctx, job, audioPath); err != nil {
+		aw.logger.Error("audio processing failed", "job", job.jobID, "err", err)
+		return nil
+	}
+	// TODO integrate vosk
 	return nil
 }
 

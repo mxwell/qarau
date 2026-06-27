@@ -47,11 +47,17 @@ func run() error {
 
 	client := qarauv1.NewJobServiceClient(conn)
 
+	transcoder, err := asr.NewFfmpegTranscoder(logger, cfg.FfmpegTool)
+	if err != nil {
+		return err
+	}
+
 	worker, err := asr.NewASRWorker(
 		client,
 		logger,
 		cfg.WorkerID,
 		cfg.WorkingDir,
+		transcoder,
 	)
 	if err != nil {
 		return err
