@@ -12,8 +12,6 @@ import (
 
 	qarauv1 "github.com/mxwell/qarau/gen/qarau/v1"
 	"github.com/mxwell/qarau/internal/worker"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 type ASRWorker struct {
@@ -23,6 +21,10 @@ type ASRWorker struct {
 	workingDir   string
 	leaseRequest qarauv1.LeaseJobRequest
 }
+
+const (
+	maxAudioSize = 200_000_000
+)
 
 type claimedJob struct {
 	jobID   int64
@@ -42,6 +44,10 @@ func NewASRWorker(client qarauv1.JobServiceClient, logger *slog.Logger, workerID
 	}
 	if len(workerID) == 0 {
 		return nil, errors.New("empty worker ID in ASRWorker creation")
+	}
+	if err := os.MkdirAll(workingDir, 0o755); err != nil {
+		logger.Error("failed to create directory for audio files", "dir", workingDir, "err", err)
+		return nil, fmt.Errorf("working dir error: %w", err)
 	}
 	return &ASRWorker{
 		client:     client,
@@ -87,26 +93,30 @@ func (aw *ASRWorker) getFetchedAudio(ctx context.Context, job claimedJob) (strin
 		VideoId:  job.videoID,
 	}
 	stream, err := aw.client.GetFetchedAudio(ctx, &request)
-	defer stream.CloseSend()
 	if err != nil {
 		aw.logger.Error("GetFetchedAudio request failed", "job", job.jobID, "err", err)
 		return "", err
 	}
+	defer stream.CloseSend()
 
 	// Getting metadata
 	metaResponse, err := stream.Recv()
 	if err != nil {
 		aw.logger.Error("stream reading fail", "job", job.jobID, "err", err)
-		return "", status.Errorf(codes.Unavailable, "stream read error")
+		return "", fmt.Errorf("stream read error: %w", err)
 	}
 	if metaResponse == nil || metaResponse.GetMeta() == nil {
 		aw.logger.Error("empty meta message", "job", job.jobID)
-		return "", status.Errorf(codes.Unavailable, "empty meta message")
+		return "", errors.New("empty meta message")
 	}
 
-	if err = os.MkdirAll(aw.workingDir, 0o755); err != nil {
-		aw.logger.Error("failed to create directory for audio file", "dir", aw.workingDir, "err", err)
-		return "", status.Errorf(codes.Internal, "filesystem error")
+	declaredLength := metaResponse.GetMeta().Length
+	if declaredLength < 1024 {
+		aw.logger.Error("too short declared audio", "job", job.jobID, "len", declaredLength)
+		return "", errors.New("too short audio")
+	}
+	if declaredLength > maxAudioSize {
+		return "", fmt.Errorf("declared audio length is too big: %d > %d", declaredLength, maxAudioSize)
 	}
 
 	filename := metaResponse.GetMeta().Filename
@@ -115,15 +125,9 @@ func (aw *ASRWorker) getFetchedAudio(ctx context.Context, job claimedJob) (strin
 	audioFile, err := os.Create(path)
 	if err != nil {
 		aw.logger.Error("failed to create audio file", "job", job.jobID, "err", err, "path", path)
-		return "", status.Errorf(codes.Internal, "failed to create file")
+		return "", fmt.Errorf("failed to create file: %w", err)
 	}
 	defer audioFile.Close()
-
-	declaredLength := metaResponse.GetMeta().Length
-	if declaredLength < 1024 {
-		aw.logger.Error("too short declared audio", "job", job.jobID, "len", declaredLength)
-		return "", status.Errorf(codes.InvalidArgument, "too short audio")
-	}
 
 	written := int64(0)
 	receivedChunks := 0
@@ -136,22 +140,22 @@ func (aw *ASRWorker) getFetchedAudio(ctx context.Context, job claimedJob) (strin
 		}
 		if err != nil {
 			aw.logger.Error("stream reading fail", "job", job.jobID, "err", err)
-			return "", status.Errorf(codes.Unavailable, "stream read error")
+			return "", fmt.Errorf("stream read error: %w", err)
 		}
 		if response == nil || response.GetChunk() == nil {
 			aw.logger.Error("empty chunk message", "job", job.jobID)
-			return "", status.Errorf(codes.Unavailable, "empty chunk message")
+			return "", fmt.Errorf("empty chunk message")
 		}
 		chunk := response.GetChunk()
 		offset := chunk.Offset
 		if offset != written {
 			aw.logger.Error("chunk offset mismatch", "written", written, "offset", offset)
-			return "", status.Errorf(codes.FailedPrecondition, "audio chunk offset mismatch")
+			return "", fmt.Errorf("audio chunk offset mismatch")
 		}
 		calculated := crc32.ChecksumIEEE(chunk.Content)
 		if calculated != chunk.Crc32 {
 			aw.logger.Error("chunk checksum mismatch", "calculated", calculated, "received", chunk.Crc32, "job", job.jobID, "offset", offset)
-			return "", status.Errorf(codes.FailedPrecondition, "chunk checksum mismatch")
+			return "", fmt.Errorf("chunk checksum mismatch")
 		}
 		chunkSize := int64(len(chunk.Content))
 		if offset+chunkSize == declaredLength || receivedChunks%10 == 0 {
@@ -160,25 +164,26 @@ func (aw *ASRWorker) getFetchedAudio(ctx context.Context, job claimedJob) (strin
 		n, err := audioFile.Write(chunk.Content)
 		if err != nil {
 			aw.logger.Error("file write error", "job", job.jobID, "err", err)
-			return "", status.Errorf(codes.Internal, "failed to write to file")
+			return "", fmt.Errorf("failed to write to file: %w", err)
 		}
 		if int64(n) != chunkSize {
 			aw.logger.Error("partial file write", "job", job.jobID)
-			return "", status.Errorf(codes.Internal, "failed to write to file")
+			return "", fmt.Errorf("partial file write")
 		}
 		written += chunkSize
 		receivedChunks += 1
 		if written > declaredLength {
 			aw.logger.Error("audio is longer than declared", "job", job.jobID, "declared", declaredLength, "written", written)
-			return "", status.Errorf(codes.FailedPrecondition, "longer than declared")
+			return "", fmt.Errorf("audio is longer than declared")
 		}
 	}
 
 	if written != declaredLength {
 		aw.logger.Error("audio length mismatch", "job", job.jobID, "declared", declaredLength, "written", written)
-		return "", status.Errorf(codes.FailedPrecondition, "audio length mismatch")
+		return "", fmt.Errorf("audio length mismatch")
 	}
 
+	// Explicit Close() to check the flush error, while there's already a deferred Close()
 	if err := audioFile.Close(); err != nil {
 		aw.logger.Error("failed to close audio file", "job", job.jobID, "err", err)
 		return "", fmt.Errorf("failed to close file: %w", err)
