@@ -107,6 +107,7 @@ type FetchedAudioMeta struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Filename      string                 `protobuf:"bytes,1,opt,name=filename,proto3" json:"filename,omitempty"`
 	Length        int64                  `protobuf:"varint,2,opt,name=length,proto3" json:"length,omitempty"`
+	DurationSecs  int32                  `protobuf:"varint,3,opt,name=durationSecs,proto3" json:"durationSecs,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -151,6 +152,13 @@ func (x *FetchedAudioMeta) GetFilename() string {
 func (x *FetchedAudioMeta) GetLength() int64 {
 	if x != nil {
 		return x.Length
+	}
+	return 0
+}
+
+func (x *FetchedAudioMeta) GetDurationSecs() int32 {
+	if x != nil {
+		return x.DurationSecs
 	}
 	return 0
 }
@@ -223,10 +231,11 @@ const file_qarau_v1_get_fetched_audio_response_proto_rawDesc = "" +
 	"\x17GetFetchedAudioResponse\x120\n" +
 	"\x04meta\x18\x01 \x01(\v2\x1a.qarau.v1.FetchedAudioMetaH\x00R\x04meta\x123\n" +
 	"\x05chunk\x18\x02 \x01(\v2\x1b.qarau.v1.FetchedAudioChunkH\x00R\x05chunkB\x05\n" +
-	"\x03msg\"F\n" +
+	"\x03msg\"j\n" +
 	"\x10FetchedAudioMeta\x12\x1a\n" +
 	"\bfilename\x18\x01 \x01(\tR\bfilename\x12\x16\n" +
-	"\x06length\x18\x02 \x01(\x03R\x06length\"[\n" +
+	"\x06length\x18\x02 \x01(\x03R\x06length\x12\"\n" +
+	"\fdurationSecs\x18\x03 \x01(\x05R\fdurationSecs\"[\n" +
 	"\x11FetchedAudioChunk\x12\x16\n" +
 	"\x06offset\x18\x01 \x01(\x03R\x06offset\x12\x18\n" +
 	"\acontent\x18\x02 \x01(\fR\acontent\x12\x14\n" +

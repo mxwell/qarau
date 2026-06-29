@@ -181,8 +181,9 @@ func (s *JobService) CheckLease(ctx context.Context, jobID int64, workerID strin
 }
 
 type AudioBlobContent struct {
-	Filename string
-	Content  []byte
+	Filename     string
+	Content      []byte
+	DurationSecs int32
 }
 
 func (s *JobService) GetAudioBlob(ctx context.Context, videoID int64) (AudioBlobContent, error) {
@@ -191,9 +192,15 @@ func (s *JobService) GetAudioBlob(ctx context.Context, videoID int64) (AudioBlob
 		s.log.Error("failed to load audio blob", "videoID", videoID, "err", err)
 		return AudioBlobContent{}, err
 	}
+	video, err := s.queries.GetVideoByID(ctx, videoID)
+	if err != nil {
+		s.log.Error("failed to load video", "videoID", videoID, "err", err)
+		return AudioBlobContent{}, err
+	}
 	return AudioBlobContent{
-		Filename: row.Filename,
-		Content:  row.Content,
+		Filename:     row.Filename,
+		Content:      row.Content,
+		DurationSecs: int32(video.Duration.Microseconds / microsecondsPerSecond),
 	}, nil
 }
 

@@ -17,6 +17,7 @@ type ASRConfig struct {
 	APIPort    uint16
 	WorkingDir string
 	FfmpegTool string
+	VoskModel  string
 	LogLevel   slog.Level
 }
 
@@ -46,6 +47,7 @@ func LoadASR() (ASRConfig, error) {
 		APIPort:    v.GetUint16("API_PORT"),
 		WorkingDir: v.GetString("WORKING_DIR"),
 		FfmpegTool: v.GetString("FFMPEG"),
+		VoskModel:  v.GetString("VOSK_MODEL"),
 		LogLevel:   logLevel,
 	}
 
@@ -64,6 +66,9 @@ func LoadASR() (ASRConfig, error) {
 	}
 	if !strings.HasPrefix(cfg.FfmpegTool, "/") {
 		return ASRConfig{}, fmt.Errorf("ASR config error: invalid ffmpeg path '%v'", cfg.FfmpegTool)
+	}
+	if !strings.HasPrefix(cfg.VoskModel, "/") {
+		return ASRConfig{}, fmt.Errorf("ASR config error: invalid Vosk model path '%v'", cfg.VoskModel)
 	}
 
 	return cfg, nil

@@ -51,6 +51,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	transcriber, err := asr.NewVoskTranscriber(logger, cfg.VoskModel)
+	if err != nil {
+		return err
+	}
 
 	worker, err := asr.NewASRWorker(
 		client,
@@ -58,6 +62,7 @@ func run() error {
 		cfg.WorkerID,
 		cfg.WorkingDir,
 		transcoder,
+		transcriber,
 	)
 	if err != nil {
 		return err

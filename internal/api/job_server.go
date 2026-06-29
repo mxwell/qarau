@@ -179,8 +179,9 @@ func (s *JobServer) GetFetchedAudio(request *qarauv1.GetFetchedAudioRequest, str
 	err = stream.Send(&qarauv1.GetFetchedAudioResponse{
 		Msg: &qarauv1.GetFetchedAudioResponse_Meta{
 			Meta: &qarauv1.FetchedAudioMeta{
-				Filename: audioBlob.Filename,
-				Length:   length,
+				Filename:     audioBlob.Filename,
+				Length:       length,
+				DurationSecs: audioBlob.DurationSecs,
 			},
 		},
 	})

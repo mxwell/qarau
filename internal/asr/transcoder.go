@@ -12,7 +12,7 @@ import (
 )
 
 type Transcoder interface {
-	Transcode(ctx context.Context, audioFile string) (io.ReadCloser, error)
+	Transcode(ctx context.Context, audioFile string, sampleRate int) (io.ReadCloser, error)
 }
 
 type ffmpegTranscoder struct {
@@ -58,10 +58,10 @@ func (i *ffmpegInvocation) Close() error {
 	return nil
 }
 
-func (t *ffmpegTranscoder) Transcode(ctx context.Context, audioFile string) (io.ReadCloser, error) {
+func (t *ffmpegTranscoder) Transcode(ctx context.Context, audioFile string, sampleRate int) (io.ReadCloser, error) {
 	args := []string{
 		"-i", audioFile,
-		"-ar", "16000", // 16kHz sample rate
+		"-ar", fmt.Sprint(sampleRate),
 		"-ac", "1", // mono
 		"-f", "s16le", // 16bit
 		"-loglevel", "error",
@@ -78,6 +78,7 @@ func (t *ffmpegTranscoder) Transcode(ctx context.Context, audioFile string) (io.
 	stderr := &bytes.Buffer{}
 	cmd.Stderr = stderr
 
+	t.logger.Info("starting transcoding", "file", audioFile, "sampleRate", sampleRate)
 	if err := cmd.Start(); err != nil {
 		t.logger.Error("ffmpeg run failed", "err", err, "stderr", stderr.String())
 		return nil, fmt.Errorf("failed to start ffmpeg: %w", err)
