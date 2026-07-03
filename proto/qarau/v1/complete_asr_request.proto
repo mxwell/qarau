@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package qarau.v1;
+
+option go_package = "github.com/mxwell/qarau/gen/qarau/v1;qarauv1";
+
+import "qarau/v1/transcription.proto";
+
+message CompleteAsrRequest {
+    int64 job_id = 1;
+    int64 video_id = 2;
+    Transcription transcription = 3;
+    string worker_id = 4;  // TODO should be signed and passed through auth header
+}

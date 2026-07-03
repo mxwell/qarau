@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 
 	qarauv1 "github.com/mxwell/qarau/gen/qarau/v1"
 	"github.com/mxwell/qarau/internal/worker"
@@ -214,11 +213,11 @@ func (aw *ASRWorker) getFetchedAudio(ctx context.Context, job claimedJob) (audio
 	}, nil
 }
 
-func (aw *ASRWorker) processAudio(ctx context.Context, job claimedJob, audio fetchedAudio) (err error) {
+func (aw *ASRWorker) processAudio(ctx context.Context, job claimedJob, audio fetchedAudio) (transcription *qarauv1.Transcription, err error) {
 	reader, err := aw.transcoder.Transcode(ctx, audio.path, sampleRate)
 	if err != nil {
 		aw.logger.Error("transcoder failed", "job", job.jobID, "err", err)
-		return err
+		return nil, err
 	}
 	defer func() {
 		if cerr := reader.Close(); cerr != nil {
@@ -231,18 +230,25 @@ func (aw *ASRWorker) processAudio(ctx context.Context, job claimedJob, audio fet
 		}
 	}()
 
-	words, err := aw.transcriber.Transcribe(ctx, reader, audio.durationSecs, sampleRate)
+	return aw.transcriber.Transcribe(ctx, reader, audio.durationSecs, sampleRate)
+}
+
+func (aw *ASRWorker) sendTranscription(ctx context.Context, job claimedJob, transcription *qarauv1.Transcription) error {
+	request := &qarauv1.CompleteAsrRequest{
+		JobId:         job.jobID,
+		VideoId:       job.videoID,
+		Transcription: transcription,
+		WorkerId:      aw.workerID,
+	}
+
+	response, err := aw.client.CompleteAsr(ctx, request)
 	if err != nil {
-		aw.logger.Error("failed to transcribe PCM stream", "job", job.jobID, "err", err)
-		return err
+		return fmt.Errorf("CompleteAsr request failed: %w", err)
 	}
-	printedWords := make([]string, 0, len(words))
-	for _, w := range words {
-		printedWords = append(printedWords, fmt.Sprintf("%v:%v-%v:%v", w.Word, w.StartMs, w.EndMs, w.ConfPercent))
+	if !response.Ok {
+		return fmt.Errorf("CompleteAsr response has error: %v", response.ErrorMessage)
 	}
-	aw.logger.Info("transcribed PCM stream", "job", job.jobID, "words", strings.Join(printedWords, " "))
-	// TODO submit transcription and complete job
-	return err
+	return nil
 }
 
 func (aw *ASRWorker) Process(ctx context.Context, job claimedJob) error {
@@ -253,10 +259,21 @@ func (aw *ASRWorker) Process(ctx context.Context, job claimedJob) error {
 		// TODO unlock the job
 		return nil
 	}
-	if err := aw.processAudio(ctx, job, audio); err != nil {
+
+	transcription, err := aw.processAudio(ctx, job, audio)
+	if err != nil {
 		aw.logger.Error("audio processing failed", "job", job.jobID, "err", err)
 		return nil
 	}
+	if transcription == nil {
+		aw.logger.Error("nil transcription from processing", "job", job.jobID)
+		return nil
+	}
+	if err := aw.sendTranscription(ctx, job, transcription); err != nil {
+		aw.logger.Error("failed to send transcription", "job", job.jobID, "err", err)
+		return nil
+	}
+	aw.logger.Info("transcription sent", "job", job.jobID, "words", len(transcription.Words))
 	return nil
 }
 

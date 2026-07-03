@@ -228,6 +228,50 @@ func (s *JobServer) GetFetchedAudio(request *qarauv1.GetFetchedAudioRequest, str
 	return nil
 }
 
+func (s *JobServer) CompleteAsr(ctx context.Context, request *qarauv1.CompleteAsrRequest) (*qarauv1.GenericResponse, error) {
+	jobID := request.JobId
+	workerID := request.WorkerId
+	transcription := request.Transcription
+
+	if jobID <= 0 {
+		s.logger.Error("invalid jobID", "job", jobID)
+		return &qarauv1.GenericResponse{
+			Ok:           false,
+			ErrorMessage: "invalid jobID",
+		}, status.Errorf(codes.InvalidArgument, "invalid jobID")
+	}
+	if workerID == "" {
+		s.logger.Error("empty workerID", "workerID", workerID)
+		return &qarauv1.GenericResponse{
+			Ok:           false,
+			ErrorMessage: "empty workerID",
+		}, status.Errorf(codes.InvalidArgument, "empty workerID")
+	}
+
+	s.logger.Info("received CompleteAsr request", "job", jobID, "worker", workerID)
+
+	if transcription == nil {
+		s.logger.Error("nil transcription in CompleteAsrRequest", "job", jobID, "worker", workerID)
+		return &qarauv1.GenericResponse{
+			Ok:           false,
+			ErrorMessage: "nil transcription",
+		}, status.Errorf(codes.InvalidArgument, "nil transcription")
+	}
+
+	err := s.service.CompleteAsrJob(ctx, workerID, jobID, request.VideoId, transcription)
+	if err != nil {
+		s.logger.Error("failed to complete ASR job", "job", jobID, "err", err)
+		return &qarauv1.GenericResponse{
+			Ok:           false,
+			ErrorMessage: "internal error",
+		}, status.Errorf(codes.Internal, "internal error")
+	}
+	s.logger.Info("ASR job complete", "job", jobID)
+	return &qarauv1.GenericResponse{
+		Ok: true,
+	}, nil
+}
+
 func (s *JobServer) FailJob(ctx context.Context, request *qarauv1.FailJobRequest) (*qarauv1.FailJobResponse, error) {
 	s.logger.Info("received FailJob request", "job", request.JobId, "worker", request.WorkerId, "errorMessage", request.ErrorMessage)
 	if err := s.service.FailJob(ctx, request.JobId, request.WorkerId, request.ErrorMessage); err != nil {

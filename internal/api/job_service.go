@@ -204,6 +204,74 @@ func (s *JobService) GetAudioBlob(ctx context.Context, videoID int64) (AudioBlob
 	}, nil
 }
 
+/*
+ * The method does several things under 1 transaction:
+ * - creates a new transription (or replaces old transcription by the same model)
+ * - ensures old words are removed in the case of existing transcription replacement
+ * - inserts new words
+ * - marks the ASR job done
+ */
+func (s *JobService) CompleteAsrJob(ctx context.Context, workerID string, jobID int64, videoID int64, transcription *qarauv1.Transcription) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx) // safe even after tx.Commit() -- does nothing
+
+	qtx := s.queries.WithTx(tx)
+
+	transcriptionID, err := qtx.UpsertTranscription(ctx, dbgen.UpsertTranscriptionParams{
+		VideoID: videoID,
+		Model:   transcription.Model,
+	})
+	if err != nil {
+		s.log.Error("failed to upsert transcription", "job", jobID, "err", err)
+		return err
+	}
+
+	err = qtx.DeleteWordsByTranscriptionId(ctx, transcriptionID)
+	if err != nil {
+		s.log.Error("word delete request failed", "job", jobID, "err", err)
+		return err
+	}
+
+	if len(transcription.Words) > 0 {
+		wordsParams := make([]dbgen.InsertWordsParams, 0, len(transcription.Words))
+		for i := range transcription.Words {
+			word := transcription.Words[i]
+			wordsParams = append(wordsParams, dbgen.InsertWordsParams{
+				TranscriptionID: transcriptionID,
+				Seq:             int32(i),
+				StartMs:         int32(word.StartMs),
+				EndMs:           int32(word.EndMs),
+				Word:            word.Word,
+				Confidence:      int16(word.Confidence),
+			})
+		}
+		insertCount, err := qtx.InsertWords(ctx, wordsParams)
+		if err != nil {
+			s.log.Error("word bulk insert failed", "job", jobID, "count", len(transcription.Words), "err", err)
+			return err
+		}
+		s.log.Info("inserted words", "job", jobID, "transcription", transcriptionID, "insertCount", insertCount)
+	} else {
+		s.log.Info("no words inserted", "job", jobID, "transcription", transcriptionID)
+	}
+
+	_, err = qtx.MarkJobDone(ctx, dbgen.MarkJobDoneParams{
+		JobID:    jobID,
+		JobType:  dbgen.JobTypeAsr,
+		LockedBy: &workerID,
+	})
+	if err != nil {
+		s.log.Error("failed to mark ASR job done", "job", jobID, "err", err)
+		return err
+	}
+
+	s.log.Info("transcription is stored to DB", "job", jobID, "transcription", transcriptionID, "words", len(transcription.Words))
+	return tx.Commit(ctx)
+}
+
 func (s *JobService) FailJob(ctx context.Context, jobID int64, workerID string, errorMessage string) error {
 	job, err := s.queries.GetJob(ctx, jobID)
 	if err != nil {

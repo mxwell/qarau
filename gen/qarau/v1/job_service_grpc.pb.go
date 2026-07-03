@@ -22,6 +22,7 @@ const (
 	JobService_LeaseJob_FullMethodName        = "/qarau.v1.JobService/LeaseJob"
 	JobService_CompleteFetch_FullMethodName   = "/qarau.v1.JobService/CompleteFetch"
 	JobService_GetFetchedAudio_FullMethodName = "/qarau.v1.JobService/GetFetchedAudio"
+	JobService_CompleteAsr_FullMethodName     = "/qarau.v1.JobService/CompleteAsr"
 	JobService_FailJob_FullMethodName         = "/qarau.v1.JobService/FailJob"
 )
 
@@ -37,6 +38,7 @@ type JobServiceClient interface {
 	LeaseJob(ctx context.Context, in *LeaseJobRequest, opts ...grpc.CallOption) (*LeaseJobResponse, error)
 	CompleteFetch(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[CompleteFetchRequest, CompleteFetchResponse], error)
 	GetFetchedAudio(ctx context.Context, in *GetFetchedAudioRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[GetFetchedAudioResponse], error)
+	CompleteAsr(ctx context.Context, in *CompleteAsrRequest, opts ...grpc.CallOption) (*GenericResponse, error)
 	FailJob(ctx context.Context, in *FailJobRequest, opts ...grpc.CallOption) (*FailJobResponse, error)
 }
 
@@ -90,6 +92,16 @@ func (c *jobServiceClient) GetFetchedAudio(ctx context.Context, in *GetFetchedAu
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type JobService_GetFetchedAudioClient = grpc.ServerStreamingClient[GetFetchedAudioResponse]
 
+func (c *jobServiceClient) CompleteAsr(ctx context.Context, in *CompleteAsrRequest, opts ...grpc.CallOption) (*GenericResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GenericResponse)
+	err := c.cc.Invoke(ctx, JobService_CompleteAsr_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *jobServiceClient) FailJob(ctx context.Context, in *FailJobRequest, opts ...grpc.CallOption) (*FailJobResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(FailJobResponse)
@@ -112,6 +124,7 @@ type JobServiceServer interface {
 	LeaseJob(context.Context, *LeaseJobRequest) (*LeaseJobResponse, error)
 	CompleteFetch(grpc.ClientStreamingServer[CompleteFetchRequest, CompleteFetchResponse]) error
 	GetFetchedAudio(*GetFetchedAudioRequest, grpc.ServerStreamingServer[GetFetchedAudioResponse]) error
+	CompleteAsr(context.Context, *CompleteAsrRequest) (*GenericResponse, error)
 	FailJob(context.Context, *FailJobRequest) (*FailJobResponse, error)
 	mustEmbedUnimplementedJobServiceServer()
 }
@@ -131,6 +144,9 @@ func (UnimplementedJobServiceServer) CompleteFetch(grpc.ClientStreamingServer[Co
 }
 func (UnimplementedJobServiceServer) GetFetchedAudio(*GetFetchedAudioRequest, grpc.ServerStreamingServer[GetFetchedAudioResponse]) error {
 	return status.Error(codes.Unimplemented, "method GetFetchedAudio not implemented")
+}
+func (UnimplementedJobServiceServer) CompleteAsr(context.Context, *CompleteAsrRequest) (*GenericResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CompleteAsr not implemented")
 }
 func (UnimplementedJobServiceServer) FailJob(context.Context, *FailJobRequest) (*FailJobResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method FailJob not implemented")
@@ -192,6 +208,24 @@ func _JobService_GetFetchedAudio_Handler(srv interface{}, stream grpc.ServerStre
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type JobService_GetFetchedAudioServer = grpc.ServerStreamingServer[GetFetchedAudioResponse]
 
+func _JobService_CompleteAsr_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CompleteAsrRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(JobServiceServer).CompleteAsr(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: JobService_CompleteAsr_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(JobServiceServer).CompleteAsr(ctx, req.(*CompleteAsrRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _JobService_FailJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(FailJobRequest)
 	if err := dec(in); err != nil {
@@ -220,6 +254,10 @@ var JobService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "LeaseJob",
 			Handler:    _JobService_LeaseJob_Handler,
+		},
+		{
+			MethodName: "CompleteAsr",
+			Handler:    _JobService_CompleteAsr_Handler,
 		},
 		{
 			MethodName: "FailJob",

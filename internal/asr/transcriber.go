@@ -9,10 +9,11 @@ import (
 	"log/slog"
 
 	vosk "github.com/alphacep/vosk-api/go"
+	qarauv1 "github.com/mxwell/qarau/gen/qarau/v1"
 )
 
 type Transcriber interface {
-	Transcribe(context.Context, io.Reader, int32, float64) ([]PackedWord, error)
+	Transcribe(context.Context, io.Reader, int32, float64) (*qarauv1.Transcription, error)
 }
 
 type voskTranscriber struct {
@@ -48,19 +49,12 @@ type voskResult struct {
 	Text   string           `json:"text"`
 }
 
-type PackedWord struct {
-	Word        string
-	StartMs     int
-	EndMs       int
-	ConfPercent int8
-}
-
-func packWord(resultWord voskResultWord) PackedWord {
-	return PackedWord{
-		Word:        resultWord.Word,
-		StartMs:     int(resultWord.Start * 1000),
-		EndMs:       int(resultWord.End * 1000),
-		ConfPercent: int8(min(100, resultWord.Conf*100)),
+func packWord(resultWord voskResultWord) *qarauv1.Word {
+	return &qarauv1.Word{
+		Word:       resultWord.Word,
+		StartMs:    uint32(resultWord.Start * 1000),
+		EndMs:      uint32(resultWord.End * 1000),
+		Confidence: uint32(min(100, resultWord.Conf*100)),
 	}
 }
 
@@ -69,7 +63,7 @@ func (t *voskTranscriber) Transcribe(
 	pcmReader io.Reader,
 	durationSecs int32,
 	sampleRate float64,
-) ([]PackedWord, error) {
+) (*qarauv1.Transcription, error) {
 	rec, err := vosk.NewRecognizer(t.model, sampleRate)
 	if err != nil {
 		return nil, err
@@ -83,7 +77,7 @@ func (t *voskTranscriber) Transcribe(
 	estimatedBytes := durationSecs * 2 * int32(sampleRate)
 	emptyReadsInRow := 0
 
-	packedWords := make([]PackedWord, 0)
+	packedWords := make([]*qarauv1.Word, 0)
 
 	for {
 		n, err := pcmReader.Read(buf)
@@ -97,19 +91,19 @@ func (t *voskTranscriber) Transcribe(
 			emptyReadsInRow += 1
 			if emptyReadsInRow > 10 {
 				t.logger.Error("stopping after too many empty reads in a row", "emptyReads", emptyReadsInRow)
-				return packedWords, errors.New("too many empty reads")
+				return nil, errors.New("too many empty reads")
 			}
 		}
 		if ctx.Err() != nil {
 			t.logger.Info("context cancelled", "err", ctx.Err())
-			return packedWords, ctx.Err()
+			return nil, ctx.Err()
 		}
 		if err != nil {
 			if err == io.EOF {
 				break
 			}
 			t.logger.Error("failed to read PCM data", "err", err)
-			return packedWords, err
+			return nil, err
 		}
 		if readChunks%10 == 0 {
 			t.logger.Info("copied PCM to recognizer", "bytes", fmt.Sprintf("%d/%d", readBytes, estimatedBytes), "chunks", readChunks)
@@ -119,7 +113,7 @@ func (t *voskTranscriber) Transcribe(
 		var parsed voskResult
 		if err := json.Unmarshal([]byte(result), &parsed); err != nil {
 			t.logger.Error("result parse fail", "result", result, "err", err)
-			return packedWords, fmt.Errorf("Vosk result parse fail: %w", err)
+			return nil, fmt.Errorf("Vosk result parse fail: %w", err)
 		}
 		if len(parsed.Text) > 0 {
 			t.logger.Info("result parsed", "parsed", parsed.Text)
@@ -137,7 +131,7 @@ func (t *voskTranscriber) Transcribe(
 	var parsed voskResult
 	if err := json.Unmarshal([]byte(finalResult), &parsed); err != nil {
 		t.logger.Error("final result parse fail", "finalResult", finalResult, "err", err)
-		return packedWords, fmt.Errorf("Vosk final result parse fail: %w", err)
+		return nil, fmt.Errorf("Vosk final result parse fail: %w", err)
 	}
 	t.logger.Info("final result parsed", "parsed", parsed.Text)
 	resultWords := parsed.Result
@@ -145,5 +139,8 @@ func (t *voskTranscriber) Transcribe(
 		packedWords = append(packedWords, packWord(resultWords[i]))
 	}
 
-	return packedWords, nil
+	return &qarauv1.Transcription{
+		Model: "vosk",
+		Words: packedWords,
+	}, nil
 }

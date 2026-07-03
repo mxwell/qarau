@@ -121,6 +121,13 @@ type Job struct {
 	FinishedAt      pgtype.Timestamptz `json:"finished_at"`
 }
 
+type Transcription struct {
+	ID        int64              `json:"id"`
+	VideoID   int64              `json:"video_id"`
+	Model     string             `json:"model"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type Video struct {
 	ID              int64              `json:"id"`
 	OnlineVideoID   string             `json:"online_video_id"`
@@ -135,4 +142,13 @@ type Video struct {
 	ThumbnailWidth  *int32             `json:"thumbnail_width"`
 	ThumbnailHeight *int32             `json:"thumbnail_height"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
+type Word struct {
+	TranscriptionID int64  `json:"transcription_id"`
+	Seq             int32  `json:"seq"`
+	StartMs         int32  `json:"start_ms"`
+	EndMs           int32  `json:"end_ms"`
+	Word            string `json:"word"`
+	Confidence      int16  `json:"confidence"`
 }

@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package qarau.v1;
+
+option go_package = "github.com/mxwell/qarau/gen/qarau/v1;qarauv1";
+
+message Word {
+    string word = 1;
+    uint32 start_ms = 2;
+    uint32 end_ms = 3;
+    uint32 confidence = 4;
+}
