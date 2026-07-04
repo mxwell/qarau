@@ -9,9 +9,9 @@ type InputWord struct {
 }
 
 type Subtitle struct {
-	Text    string
-	StartMs int
-	EndMs   int
+	Text    string `json:"text"`
+	StartMs int    `json:"start_ms"`
+	EndMs   int    `json:"end_ms"`
 }
 
 func joinWords(words []InputWord) Subtitle {

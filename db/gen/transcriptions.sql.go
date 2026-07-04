@@ -18,6 +18,66 @@ func (q *Queries) DeleteWordsByTranscriptionId(ctx context.Context, transcriptio
 	return err
 }
 
+const getTranscription = `-- name: GetTranscription :one
+SELECT id, video_id, model, created_at FROM transcriptions
+WHERE id = $1
+LIMIT 1
+`
+
+func (q *Queries) GetTranscription(ctx context.Context, id int64) (Transcription, error) {
+	row := q.db.QueryRow(ctx, getTranscription, id)
+	var i Transcription
+	err := row.Scan(
+		&i.ID,
+		&i.VideoID,
+		&i.Model,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getWords = `-- name: GetWords :many
+SELECT transcription_id, seq, start_ms, end_ms, word, confidence FROM words
+WHERE
+    transcription_id = $1 AND
+    seq >= $2
+ORDER BY seq ASC
+LIMIT $3
+`
+
+type GetWordsParams struct {
+	TranscriptionID int64 `json:"transcription_id"`
+	StartSeq        int32 `json:"start_seq"`
+	WordCount       int32 `json:"word_count"`
+}
+
+func (q *Queries) GetWords(ctx context.Context, arg GetWordsParams) ([]Word, error) {
+	rows, err := q.db.Query(ctx, getWords, arg.TranscriptionID, arg.StartSeq, arg.WordCount)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Word
+	for rows.Next() {
+		var i Word
+		if err := rows.Scan(
+			&i.TranscriptionID,
+			&i.Seq,
+			&i.StartMs,
+			&i.EndMs,
+			&i.Word,
+			&i.Confidence,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 type InsertWordsParams struct {
 	TranscriptionID int64  `json:"transcription_id"`
 	Seq             int32  `json:"seq"`

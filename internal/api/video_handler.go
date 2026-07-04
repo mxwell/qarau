@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"log/slog"
+	"math"
 	"regexp"
 	"strconv"
 
@@ -35,6 +36,7 @@ func NewVideoHandler(log *slog.Logger, svc *VideoService) (*VideoHandler, error)
 func (h *VideoHandler) Register(r fiber.Router) {
 	r.Get("/probe/:online_video_id", h.Probe)
 	r.Post("/fetch/:video_id", h.Fetch)
+	r.Get("/subtitles/:transcription_id", h.Subtitles)
 }
 
 func (h *VideoHandler) Probe(c *fiber.Ctx) error {
@@ -106,6 +108,51 @@ func videoJobsJson(c *fiber.Ctx, videoJobs *VideoJobs) error {
 		"fetch_done":       videoJobs.fetch.state == dbgen.JobStateDone,
 		"asr_done":         videoJobs.asr.state == dbgen.JobStateDone,
 	})
+}
+
+func (h *VideoHandler) Subtitles(c *fiber.Ctx) error {
+	transcriptionIDString := c.Params("transcription_id")
+	transcriptionID, err := strconv.ParseInt(transcriptionIDString, 10, 64)
+	if err != nil {
+		h.log.Info("failed to parse transcriptionID", "param", transcriptionIDString, "err", err)
+		return badRequest(c, "invalid transcription_id")
+	}
+	if transcriptionID < 0 {
+		h.log.Info("negative transcriptionID", "transcriptionID", transcriptionID)
+		return badRequest(c, "invalid transcription_id")
+	}
+	seq := c.QueryInt("seq", 0)
+	if seq < 0 || seq > math.MaxInt32 {
+		h.log.Info("invalid seq", "seq", seq)
+		return badRequest(c, "invalid seq")
+	}
+	wordCount := c.QueryInt("word_count", 100)
+	if wordCount <= 0 || wordCount > 1000 {
+		h.log.Info("invalid word_count", "word_count", wordCount)
+		return badRequest(c, "invalid word_count")
+	}
+	confidence := c.QueryInt("confidence", 0)
+	if confidence < 0 || confidence > 100 {
+		h.log.Info("invalid subtitles confidence", "confidence", confidence)
+		return badRequest(c, "invalid confidence")
+	}
+
+	subtitleSpan, err := h.svc.GetSubtitles(
+		c.UserContext(),
+		transcriptionID,
+		int32(seq),
+		int32(wordCount),
+		int16(confidence),
+	)
+	if err != nil {
+		if errors.Is(err, ErrNoSuchTranscription) {
+			h.log.Info("no such transcription", "transcriptionID", transcriptionID, "err", err)
+			return notFound(c, "transcription not found")
+		}
+		h.log.Error("failed to get subtitles", "transcriptionID", transcriptionID, "err", err)
+		return internalError(c, "internal error")
+	}
+	return c.JSON(subtitleSpan)
 }
 
 func badRequest(c *fiber.Ctx, message string) error {

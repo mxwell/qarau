@@ -9,11 +9,13 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	dbgen "github.com/mxwell/qarau/db/gen"
+	"github.com/mxwell/qarau/internal/subtitles"
 )
 
 var (
-	ErrCorruptedData      = errors.New("corrupted data")
-	ErrUnprocessableVideo = errors.New("unprocessable video")
+	ErrCorruptedData       = errors.New("corrupted data")
+	ErrUnprocessableVideo  = errors.New("unprocessable video")
+	ErrNoSuchTranscription = errors.New("no transcription")
 )
 
 type VideoService struct {
@@ -293,5 +295,68 @@ func (s *VideoService) CreateOrGetVideoJobs(ctx context.Context, videoID int64) 
 			jobID: fetchJobID,
 			state: dbgen.JobStatePending,
 		},
+	}, nil
+}
+
+type SubtitleSpan struct {
+	Items []subtitles.Subtitle `json:"items"`
+	Next  int32                `json:"next"`
+}
+
+func (s *VideoService) GetSubtitles(ctx context.Context, transcriptionID int64, startSeq int32, wordCount int32, minConfidence int16) (SubtitleSpan, error) {
+	words, err := s.queries.GetWords(ctx, dbgen.GetWordsParams{
+		TranscriptionID: transcriptionID,
+		StartSeq:        startSeq,
+		WordCount:       wordCount,
+	})
+	if err != nil {
+		s.log.Error("failed to load words from DB", "transcription", transcriptionID, "err", err)
+		return SubtitleSpan{}, err
+	}
+	if len(words) == 0 {
+		_, err := s.queries.GetTranscription(ctx, transcriptionID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return SubtitleSpan{}, ErrNoSuchTranscription
+			}
+			return SubtitleSpan{}, err
+		}
+		return SubtitleSpan{
+			Next: -1,
+		}, nil
+	}
+	inputWords := make([]subtitles.InputWord, 0, len(words))
+	maxSeq := int32(-1)
+	for _, w := range words {
+		var word string
+		if w.Confidence >= minConfidence {
+			word = w.Word
+		} else {
+			word = "[" + w.Word + "?]"
+		}
+		inputWords = append(inputWords, subtitles.InputWord{
+			Word:    word,
+			StartMs: int(w.StartMs),
+			EndMs:   int(w.EndMs),
+		})
+		maxSeq = max(maxSeq, w.Seq)
+	}
+	subtitleItems := subtitles.Group(inputWords, 1000, 20)
+
+	/**
+	 * XXX pagination is simplified here.
+	 * A better page start is after a subtitle end.
+	 * But we split pages by word count: page 0 - words 0..99, page 1 - words 100..199, etc.
+	 */
+	var nextSeq int32
+	if maxSeq >= 0 && len(words) >= int(wordCount) {
+		nextSeq = maxSeq + 1
+	} else {
+		nextSeq = -1
+	}
+
+	return SubtitleSpan{
+		Items: subtitleItems,
+		Next:  nextSeq,
 	}, nil
 }

@@ -29,3 +29,16 @@ INSERT INTO words (
     $5,
     $6
 );
+
+-- name: GetTranscription :one
+SELECT * FROM transcriptions
+WHERE id = sqlc.arg('id')
+LIMIT 1;
+
+-- name: GetWords :many
+SELECT * FROM words
+WHERE
+    transcription_id = sqlc.arg('transcription_id') AND
+    seq >= sqlc.arg('start_seq')
+ORDER BY seq ASC
+LIMIT sqlc.arg('word_count');

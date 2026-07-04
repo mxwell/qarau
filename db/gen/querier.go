@@ -18,9 +18,11 @@ type Querier interface {
 	DeleteWordsByTranscriptionId(ctx context.Context, transcriptionID int64) error
 	GetAudioBlob(ctx context.Context, videoID int64) (GetAudioBlobRow, error)
 	GetJob(ctx context.Context, jobID int64) (GetJobRow, error)
+	GetTranscription(ctx context.Context, id int64) (Transcription, error)
 	GetVideo(ctx context.Context, onlineVideoID string) (GetVideoRow, error)
 	GetVideoByID(ctx context.Context, videoID int64) (GetVideoByIDRow, error)
 	GetVideoJobs(ctx context.Context, videoID int64) ([]GetVideoJobsRow, error)
+	GetWords(ctx context.Context, arg GetWordsParams) ([]Word, error)
 	InsertWords(ctx context.Context, arg []InsertWordsParams) (int64, error)
 	MarkJobDone(ctx context.Context, arg MarkJobDoneParams) (int64, error)
 	MarkJobFailed(ctx context.Context, arg MarkJobFailedParams) (int64, error)
