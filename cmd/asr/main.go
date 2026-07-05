@@ -61,6 +61,7 @@ func run() error {
 		logger,
 		cfg.WorkerID,
 		cfg.WorkingDir,
+		cfg.RemoveFiles,
 		transcoder,
 		transcriber,
 	)

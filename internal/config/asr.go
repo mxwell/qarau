@@ -12,13 +12,14 @@ import (
 )
 
 type ASRConfig struct {
-	WorkerID   string
-	APIHost    string
-	APIPort    uint16
-	WorkingDir string
-	FfmpegTool string
-	VoskModel  string
-	LogLevel   slog.Level
+	WorkerID    string
+	APIHost     string
+	APIPort     uint16
+	WorkingDir  string
+	RemoveFiles bool
+	FfmpegTool  string
+	VoskModel   string
+	LogLevel    slog.Level
 }
 
 func LoadASR() (ASRConfig, error) {
@@ -30,6 +31,7 @@ func LoadASR() (ASRConfig, error) {
 
 	v.SetDefault("API_HOST", "localhost")
 	v.SetDefault("API_PORT", 7991)
+	v.SetDefault("REMOVE_FILES", 1)
 	v.SetDefault("LOG_LEVEL", "INFO")
 
 	if err := v.ReadInConfig(); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -42,13 +44,14 @@ func LoadASR() (ASRConfig, error) {
 	}
 
 	cfg := ASRConfig{
-		WorkerID:   v.GetString("WORKER_ID"),
-		APIHost:    v.GetString("API_HOST"),
-		APIPort:    v.GetUint16("API_PORT"),
-		WorkingDir: v.GetString("WORKING_DIR"),
-		FfmpegTool: v.GetString("FFMPEG"),
-		VoskModel:  v.GetString("VOSK_MODEL"),
-		LogLevel:   logLevel,
+		WorkerID:    v.GetString("WORKER_ID"),
+		APIHost:     v.GetString("API_HOST"),
+		APIPort:     v.GetUint16("API_PORT"),
+		WorkingDir:  v.GetString("WORKING_DIR"),
+		RemoveFiles: v.GetUint8("REMOVE_FILES") > 0,
+		FfmpegTool:  v.GetString("FFMPEG"),
+		VoskModel:   v.GetString("VOSK_MODEL"),
+		LogLevel:    logLevel,
 	}
 
 	if !strings.HasPrefix(cfg.WorkerID, "asr_") {

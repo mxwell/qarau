@@ -214,7 +214,7 @@ func (fw *FetchWorker) failFetch(ctx context.Context, job claimedJob, errorMessa
 		fw.logger.Error("FailJob request failed", "err", err)
 		return err
 	}
-	fw.logger.Info("FailJob request sent")
+	fw.logger.Info("FailJob request sent", "job", job.jobID)
 	return nil
 }
 
