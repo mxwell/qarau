@@ -123,6 +123,7 @@ func (c *YtClient) GetVideoInformation(ctx context.Context, onlineVideoID string
 			ThumbnailURL:    thumbnail.Url,
 			ThumbnailWidth:  int32(thumbnail.Width),
 			ThumbnailHeight: int32(thumbnail.Height),
+			LoadedFromDB:    false,
 		}, nil
 	}
 

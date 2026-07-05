@@ -36,6 +36,36 @@ func (q *Queries) GetTranscription(ctx context.Context, id int64) (Transcription
 	return i, err
 }
 
+const getTranscriptionsByVideoID = `-- name: GetTranscriptionsByVideoID :many
+SELECT id, video_id, model, created_at FROM transcriptions
+WHERE video_id = $1
+`
+
+func (q *Queries) GetTranscriptionsByVideoID(ctx context.Context, videoID int64) ([]Transcription, error) {
+	rows, err := q.db.Query(ctx, getTranscriptionsByVideoID, videoID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Transcription
+	for rows.Next() {
+		var i Transcription
+		if err := rows.Scan(
+			&i.ID,
+			&i.VideoID,
+			&i.Model,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getWords = `-- name: GetWords :many
 SELECT transcription_id, seq, start_ms, end_ms, word, confidence FROM words
 WHERE

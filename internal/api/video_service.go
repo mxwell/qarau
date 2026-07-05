@@ -69,6 +69,7 @@ func rowToVideo(row *dbgen.GetVideoRow) (*Video, error) {
 		ThumbnailURL:    *row.ThumbnailUrl,
 		ThumbnailWidth:  *row.ThumbnailWidth,
 		ThumbnailHeight: *row.ThumbnailHeight,
+		LoadedFromDB:    true,
 	}, nil
 }
 
@@ -296,6 +297,28 @@ func (s *VideoService) CreateOrGetVideoJobs(ctx context.Context, videoID int64) 
 			state: dbgen.JobStatePending,
 		},
 	}, nil
+}
+
+type TranscriptionInfo struct {
+	ID    int64  `json:"id"`
+	Model string `json:"model"`
+}
+
+func (s *VideoService) GetTranscriptions(ctx context.Context, videoID int64) ([]TranscriptionInfo, error) {
+	transcriptions, err := s.queries.GetTranscriptionsByVideoID(ctx, videoID)
+	if err != nil {
+		s.log.Error("failed to load transcriptions from DB", "videoID", videoID, "err", err)
+		return []TranscriptionInfo{}, err
+	}
+	result := make([]TranscriptionInfo, 0, len(transcriptions))
+	for _, row := range transcriptions {
+		result = append(result, TranscriptionInfo{
+			ID:    row.ID,
+			Model: row.Model,
+		})
+	}
+	s.log.Info("loaded transcriptions for video", "videoID", videoID, "count", len(result))
+	return result, nil
 }
 
 type SubtitleSpan struct {

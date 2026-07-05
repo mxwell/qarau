@@ -35,6 +35,10 @@ SELECT * FROM transcriptions
 WHERE id = sqlc.arg('id')
 LIMIT 1;
 
+-- name: GetTranscriptionsByVideoID :many
+SELECT * FROM transcriptions
+WHERE video_id = sqlc.arg('video_id');
+
 -- name: GetWords :many
 SELECT * FROM words
 WHERE

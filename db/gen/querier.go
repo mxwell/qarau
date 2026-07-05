@@ -19,6 +19,7 @@ type Querier interface {
 	GetAudioBlob(ctx context.Context, videoID int64) (GetAudioBlobRow, error)
 	GetJob(ctx context.Context, jobID int64) (GetJobRow, error)
 	GetTranscription(ctx context.Context, id int64) (Transcription, error)
+	GetTranscriptionsByVideoID(ctx context.Context, videoID int64) ([]Transcription, error)
 	GetVideo(ctx context.Context, onlineVideoID string) (GetVideoRow, error)
 	GetVideoByID(ctx context.Context, videoID int64) (GetVideoByIDRow, error)
 	GetVideoJobs(ctx context.Context, videoID int64) ([]GetVideoJobsRow, error)

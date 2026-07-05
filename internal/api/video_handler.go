@@ -39,6 +39,14 @@ func (h *VideoHandler) Register(r fiber.Router) {
 	r.Get("/subtitles/:transcription_id", h.Subtitles)
 }
 
+type ProbedVideoResponse struct {
+	ID                 int64               `json:"id"`
+	Info               APIInfo             `json:"info"`
+	ProcessingObstacle string              `json:"processing_obstacle"`
+	State              ProcessingState     `json:"state"`
+	Transcriptions     []TranscriptionInfo `json:"transcriptions"`
+}
+
 func (h *VideoHandler) Probe(c *fiber.Ctx) error {
 	onlineVideoID := c.Params("online_video_id")
 	if !onlineVideoIDPattern.MatchString(onlineVideoID) {
@@ -53,30 +61,37 @@ func (h *VideoHandler) Probe(c *fiber.Ctx) error {
 		}
 		return internalError(c, "internal error while probing video")
 	}
-	jobs, err := h.svc.GetVideoJobs(c.UserContext(), video.ID)
-	if err != nil {
-		h.log.Error("failed to load video jobs", "onlineVideoID", onlineVideoID, "err", err)
-		return internalError(c, "internal error while checking processing state")
-	}
-	processingState := jobs.GetProcessingState()
-	h.log.Info("checked video processing state", "onlineVideoID", onlineVideoID, "processingState", processingState)
-	return probedVideoJSON(c, video, processingState)
-}
 
-func probedVideoJSON(c *fiber.Ctx, video *Video, processingState ProcessingState) error {
-	return c.JSON(fiber.Map{
-		"video": fiber.Map{
-			"id":              video.ID,
-			"online_video_id": video.OnlineVideoID,
-			"title":           video.Title,
-			"channel_title":   video.ChannelTitle,
-			"duration_secs":   video.DurationSecs,
-			"default_lang":    video.DefaultLang,
-			"embeddable":      video.Embeddable,
-		},
-		"processing_obstacle": video.ProcessingObstacle(),
-		"processing_state":    processingState,
-	})
+	processingState := ProcessingStateNew
+	transcriptions := make([]TranscriptionInfo, 0)
+	if video.LoadedFromDB {
+		jobs, err := h.svc.GetVideoJobs(c.UserContext(), video.ID)
+		if err != nil {
+			h.log.Error("failed to load video jobs", "onlineVideoID", onlineVideoID, "err", err)
+			return internalError(c, "internal error while checking processing state")
+		}
+		processingState = jobs.GetProcessingState()
+
+		transcriptions, err = h.svc.GetTranscriptions(c.UserContext(), video.ID)
+		if err != nil {
+			return internalError(c, "internal error while loading transcriptions")
+		}
+		if processingState == ProcessingStateDone && len(transcriptions) == 0 {
+			h.log.Error("no transcriptions for ProcessingStateDone", "videoID", video.ID)
+			return internalError(c, "corrupted data")
+		}
+	}
+
+	h.log.Info("checked video processing state", "onlineVideoID", onlineVideoID, "processingState", processingState)
+	apiInfo := NewAPIInfo(video)
+	response := ProbedVideoResponse{
+		ID:                 video.ID,
+		Info:               apiInfo,
+		ProcessingObstacle: video.ProcessingObstacle(),
+		State:              processingState,
+		Transcriptions:     transcriptions,
+	}
+	return c.JSON(response)
 }
 
 func (h *VideoHandler) Fetch(c *fiber.Ctx) error {
