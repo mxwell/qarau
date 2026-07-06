@@ -42,21 +42,27 @@ func (v *Video) ProcessingObstacle() string {
 }
 
 type APIInfo struct {
-	OnlineVideoID string `json:"online_video_id"`
-	Title         string `json:"title"`
-	ChannelTitle  string `json:"channel_title"`
-	DurationSecs  int    `json:"duration_secs"`
-	DefaultLang   string `json:"default_lang"`
-	Embeddable    bool   `json:"embeddable"`
+	OnlineVideoID   string `json:"online_video_id"`
+	Title           string `json:"title"`
+	ChannelTitle    string `json:"channel_title"`
+	DurationSecs    int    `json:"duration_secs"`
+	DefaultLang     string `json:"default_lang"`
+	Embeddable      bool   `json:"embeddable"`
+	ThumbnailURL    string `json:"thumbnail_url"`
+	ThumbnailWidth  int32  `json:"thumbnail_width"`
+	ThumbnailHeight int32  `json:"thumbnail_height"`
 }
 
 func NewAPIInfo(video *Video) APIInfo {
 	return APIInfo{
-		OnlineVideoID: video.OnlineVideoID,
-		Title:         video.Title,
-		ChannelTitle:  video.ChannelTitle,
-		DurationSecs:  video.DurationSecs,
-		DefaultLang:   video.DefaultLang,
-		Embeddable:    video.Embeddable,
+		OnlineVideoID:   video.OnlineVideoID,
+		Title:           video.Title,
+		ChannelTitle:    video.ChannelTitle,
+		DurationSecs:    video.DurationSecs,
+		DefaultLang:     video.DefaultLang,
+		Embeddable:      video.Embeddable,
+		ThumbnailURL:    video.ThumbnailURL,
+		ThumbnailWidth:  video.ThumbnailWidth,
+		ThumbnailHeight: video.ThumbnailHeight,
 	}
 }

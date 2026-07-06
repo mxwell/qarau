@@ -93,7 +93,7 @@ func run() error {
 		return err
 	}
 
-	apiRouter := app.Group("/api/v1")
+	apiRouter := app.Group("/qarauapi/v1")
 	videoHandler.Register(apiRouter)
 
 	group, groupCtx := errgroup.WithContext(ctx)
