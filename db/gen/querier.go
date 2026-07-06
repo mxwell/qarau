@@ -6,6 +6,8 @@ package dbgen
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
@@ -16,7 +18,9 @@ type Querier interface {
 	CreateFetchJobIfAbsent(ctx context.Context, arg CreateFetchJobIfAbsentParams) (int64, error)
 	CreateVideo(ctx context.Context, arg CreateVideoParams) (int64, error)
 	DeleteWordsByTranscriptionId(ctx context.Context, transcriptionID int64) error
+	GetAsrJobQueue(ctx context.Context, createdBefore pgtype.Timestamptz) ([]GetAsrJobQueueRow, error)
 	GetAudioBlob(ctx context.Context, videoID int64) (GetAudioBlobRow, error)
+	GetFetchJobQueue(ctx context.Context, createdBefore pgtype.Timestamptz) ([]GetFetchJobQueueRow, error)
 	GetJob(ctx context.Context, jobID int64) (GetJobRow, error)
 	GetTranscription(ctx context.Context, id int64) (Transcription, error)
 	GetTranscriptionsByVideoID(ctx context.Context, videoID int64) ([]Transcription, error)

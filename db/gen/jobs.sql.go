@@ -117,6 +117,100 @@ func (q *Queries) CreateFetchJobIfAbsent(ctx context.Context, arg CreateFetchJob
 	return id, err
 }
 
+const getAsrJobQueue = `-- name: GetAsrJobQueue :many
+SELECT
+    jt.id,
+    jt.type,
+    jt.state,
+    vt.duration
+FROM jobs AS jt
+JOIN videos AS vt ON jt.video_id = vt.id
+WHERE
+    jt.type = 'asr' AND
+    jt.state IN ('pending', 'running') AND
+    jt.created_at < $1
+ORDER BY jt.created_at ASC
+`
+
+type GetAsrJobQueueRow struct {
+	ID       int64           `json:"id"`
+	Type     JobType         `json:"type"`
+	State    JobState        `json:"state"`
+	Duration pgtype.Interval `json:"duration"`
+}
+
+func (q *Queries) GetAsrJobQueue(ctx context.Context, createdBefore pgtype.Timestamptz) ([]GetAsrJobQueueRow, error) {
+	rows, err := q.db.Query(ctx, getAsrJobQueue, createdBefore)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAsrJobQueueRow
+	for rows.Next() {
+		var i GetAsrJobQueueRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Type,
+			&i.State,
+			&i.Duration,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getFetchJobQueue = `-- name: GetFetchJobQueue :many
+SELECT
+    jt.id,
+    jt.type,
+    jt.state,
+    vt.duration
+FROM jobs AS jt
+JOIN videos AS vt ON jt.video_id = vt.id
+WHERE
+    jt.type IN ('fetch', 'asr') AND
+    jt.state IN ('pending', 'running') AND
+    jt.created_at < $1
+ORDER BY jt.created_at ASC
+`
+
+type GetFetchJobQueueRow struct {
+	ID       int64           `json:"id"`
+	Type     JobType         `json:"type"`
+	State    JobState        `json:"state"`
+	Duration pgtype.Interval `json:"duration"`
+}
+
+func (q *Queries) GetFetchJobQueue(ctx context.Context, createdBefore pgtype.Timestamptz) ([]GetFetchJobQueueRow, error) {
+	rows, err := q.db.Query(ctx, getFetchJobQueue, createdBefore)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetFetchJobQueueRow
+	for rows.Next() {
+		var i GetFetchJobQueueRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Type,
+			&i.State,
+			&i.Duration,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getJob = `-- name: GetJob :one
 SELECT
     id,
@@ -156,16 +250,18 @@ const getVideoJobs = `-- name: GetVideoJobs :many
 SELECT
     id,
     state,
-    type
+    type,
+    created_at
 FROM jobs
 WHERE
     video_id = $1
 `
 
 type GetVideoJobsRow struct {
-	ID    int64    `json:"id"`
-	State JobState `json:"state"`
-	Type  JobType  `json:"type"`
+	ID        int64              `json:"id"`
+	State     JobState           `json:"state"`
+	Type      JobType            `json:"type"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 func (q *Queries) GetVideoJobs(ctx context.Context, videoID int64) ([]GetVideoJobsRow, error) {
@@ -177,7 +273,12 @@ func (q *Queries) GetVideoJobs(ctx context.Context, videoID int64) ([]GetVideoJo
 	var items []GetVideoJobsRow
 	for rows.Next() {
 		var i GetVideoJobsRow
-		if err := rows.Scan(&i.ID, &i.State, &i.Type); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.State,
+			&i.Type,
+			&i.CreatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

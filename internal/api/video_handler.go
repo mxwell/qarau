@@ -8,7 +8,6 @@ import (
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
-	dbgen "github.com/mxwell/qarau/db/gen"
 )
 
 var (
@@ -43,7 +42,7 @@ type ProbedVideoResponse struct {
 	ID                 int64               `json:"id"`
 	Info               APIInfo             `json:"info"`
 	ProcessingObstacle string              `json:"processing_obstacle"`
-	State              ProcessingState     `json:"state"`
+	Process            VideoProcess        `json:"process"`
 	Transcriptions     []TranscriptionInfo `json:"transcriptions"`
 }
 
@@ -62,33 +61,34 @@ func (h *VideoHandler) Probe(c *fiber.Ctx) error {
 		return internalError(c, "internal error while probing video")
 	}
 
-	processingState := ProcessingStateNew
+	videoProcess := VideoProcess{
+		State: ProcessingStateNew,
+	}
 	transcriptions := make([]TranscriptionInfo, 0)
 	if video.LoadedFromDB {
-		jobs, err := h.svc.GetVideoJobs(c.UserContext(), video.ID)
+		videoProcess, err = h.svc.GetVideoProcess(c.UserContext(), video.ID)
 		if err != nil {
-			h.log.Error("failed to load video jobs", "onlineVideoID", onlineVideoID, "err", err)
+			h.log.Error("failed to load process video state", "onlineVideoID", onlineVideoID, "err", err)
 			return internalError(c, "internal error while checking processing state")
 		}
-		processingState = jobs.GetProcessingState()
 
 		transcriptions, err = h.svc.GetTranscriptions(c.UserContext(), video.ID)
 		if err != nil {
 			return internalError(c, "internal error while loading transcriptions")
 		}
-		if processingState == ProcessingStateDone && len(transcriptions) == 0 {
+		if videoProcess.State == ProcessingStateDone && len(transcriptions) == 0 {
 			h.log.Error("no transcriptions for ProcessingStateDone", "videoID", video.ID)
 			return internalError(c, "corrupted data")
 		}
 	}
 
-	h.log.Info("checked video processing state", "onlineVideoID", onlineVideoID, "processingState", processingState)
+	h.log.Info("checked video process state", "onlineVideoID", onlineVideoID, "state", videoProcess.State)
 	apiInfo := NewAPIInfo(video)
 	response := ProbedVideoResponse{
 		ID:                 video.ID,
 		Info:               apiInfo,
 		ProcessingObstacle: video.ProcessingObstacle(),
-		State:              processingState,
+		Process:            videoProcess,
 		Transcriptions:     transcriptions,
 	}
 	return c.JSON(response)
@@ -101,7 +101,7 @@ func (h *VideoHandler) Fetch(c *fiber.Ctx) error {
 		h.log.Info("invalid argument", "videoID", videoIDParam)
 		return badRequest(c, "invalid video_id")
 	}
-	videoJobs, err := h.svc.CreateOrGetVideoJobs(c.UserContext(), videoID)
+	videoProcess, err := h.svc.GetOrCreateVideoProcess(c.UserContext(), videoID)
 	if err != nil {
 		if errors.Is(err, ErrNoSuchVideo) {
 			h.log.Info("no such video", "videoID", videoID)
@@ -113,16 +113,7 @@ func (h *VideoHandler) Fetch(c *fiber.Ctx) error {
 		h.log.Error("failed to create fetch job", "videoID", videoID, "err", err)
 		return internalError(c, "internal error")
 	}
-	h.log.Info("created or loaded jobs for video", "videoID", videoID, "fetch", videoJobs.fetch.jobID, "asr", videoJobs.asr.jobID)
-	return videoJobsJson(c, &videoJobs)
-}
-
-func videoJobsJson(c *fiber.Ctx, videoJobs *VideoJobs) error {
-	return c.JSON(fiber.Map{
-		"processing_state": videoJobs.GetProcessingState(),
-		"fetch_done":       videoJobs.fetch.state == dbgen.JobStateDone,
-		"asr_done":         videoJobs.asr.state == dbgen.JobStateDone,
-	})
+	return c.JSON(videoProcess)
 }
 
 func (h *VideoHandler) Subtitles(c *fiber.Ctx) error {

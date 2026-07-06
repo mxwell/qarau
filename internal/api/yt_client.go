@@ -37,17 +37,17 @@ func NewYtClient(ctx context.Context, log *slog.Logger, apiKey string) (*YtClien
 
 var durationRE = regexp.MustCompile(`PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?`)
 
-func parseDurationSecs(iso string) int64 {
+func parseDurationSecs(iso string) int32 {
 	m := durationRE.FindStringSubmatch(iso)
 	if m == nil {
 		return 0
 	}
-	parse := func(s string) int64 {
+	parse := func(s string) int32 {
 		if s == "" {
 			return 0
 		}
-		n, _ := strconv.ParseInt(s, 10, 64)
-		return n
+		n, _ := strconv.ParseInt(s, 10, 32)
+		return int32(n)
 	}
 	return parse(m[1])*3600 + parse(m[2])*60 + parse(m[3])
 }
@@ -117,7 +117,7 @@ func (c *YtClient) GetVideoInformation(ctx context.Context, onlineVideoID string
 			ChannelID:       v.Snippet.ChannelId,
 			ChannelTitle:    v.Snippet.ChannelTitle,
 			PublishedAt:     publishedAt,
-			DurationSecs:    int(durationSecs),
+			DurationSecs:    durationSecs,
 			DefaultLang:     v.Snippet.DefaultLanguage,
 			Embeddable:      v.Status.Embeddable,
 			ThumbnailURL:    thumbnail.Url,

@@ -13,7 +13,8 @@ WHERE id = sqlc.arg('job_id');
 SELECT
     id,
     state,
-    type
+    type,
+    created_at
 FROM jobs
 WHERE
     video_id = sqlc.arg('video_id');
@@ -104,3 +105,31 @@ WHERE
     state = 'running' AND
     locked_by = sqlc.arg('locked_by')
 RETURNING id;
+
+-- name: GetFetchJobQueue :many
+SELECT
+    jt.id,
+    jt.type,
+    jt.state,
+    vt.duration
+FROM jobs AS jt
+JOIN videos AS vt ON jt.video_id = vt.id
+WHERE
+    jt.type IN ('fetch', 'asr') AND
+    jt.state IN ('pending', 'running') AND
+    jt.created_at < sqlc.arg('created_before')
+ORDER BY jt.created_at ASC;
+
+-- name: GetAsrJobQueue :many
+SELECT
+    jt.id,
+    jt.type,
+    jt.state,
+    vt.duration
+FROM jobs AS jt
+JOIN videos AS vt ON jt.video_id = vt.id
+WHERE
+    jt.type = 'asr' AND
+    jt.state IN ('pending', 'running') AND
+    jt.created_at < sqlc.arg('created_before')
+ORDER BY jt.created_at ASC;

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -41,7 +42,18 @@ func NewVideoService(log *slog.Logger, queries *dbgen.Queries, ytClient *YtClien
 	}, nil
 }
 
-const microsecondsPerSecond = 1_000_000
+const (
+	microsecondsPerSecond = 1_000_000
+	maxQueueSize          = 5
+)
+
+func microsToInt32Seconds(micros int64) int32 {
+	return int32(micros / microsecondsPerSecond)
+}
+
+func pgIntervalToInt32Seconds(interval *pgtype.Interval) int32 {
+	return microsToInt32Seconds(interval.Microseconds)
+}
 
 func rowToVideo(row *dbgen.GetVideoRow) (*Video, error) {
 	if row.DefaultLang == nil {
@@ -63,7 +75,7 @@ func rowToVideo(row *dbgen.GetVideoRow) (*Video, error) {
 		ChannelID:       row.ChannelID,
 		ChannelTitle:    row.ChannelTitle,
 		PublishedAt:     row.PublishedAt.Time,
-		DurationSecs:    int(row.Duration.Microseconds / microsecondsPerSecond),
+		DurationSecs:    pgIntervalToInt32Seconds(&row.Duration),
 		DefaultLang:     *row.DefaultLang,
 		Embeddable:      row.Embeddable,
 		ThumbnailURL:    *row.ThumbnailUrl,
@@ -93,7 +105,7 @@ func byIDRowToVideo(row *dbgen.GetVideoByIDRow) (*Video, error) {
 		ChannelID:       row.ChannelID,
 		ChannelTitle:    row.ChannelTitle,
 		PublishedAt:     row.PublishedAt.Time,
-		DurationSecs:    int(row.Duration.Microseconds / microsecondsPerSecond),
+		DurationSecs:    pgIntervalToInt32Seconds(&row.Duration),
 		DefaultLang:     *row.DefaultLang,
 		Embeddable:      row.Embeddable,
 		ThumbnailURL:    *row.ThumbnailUrl,
@@ -168,103 +180,193 @@ type VideoJobs struct {
 type ProcessingState string
 
 const (
-	ProcessingStateNew     ProcessingState = "new"
-	ProcessingStatePending ProcessingState = "pending"
-	ProcessingStateRunning ProcessingState = "running"
-	ProcessingStateDone    ProcessingState = "done"
-	ProcessingStateFailed  ProcessingState = "failed"
+	ProcessingStateNew          ProcessingState = "new"
+	ProcessingStateAtCapacity   ProcessingState = "at_capacity"
+	ProcessingStateFetchPending ProcessingState = "fetch_pending"
+	ProcessingStateFetchRunning ProcessingState = "fetch_running"
+	ProcessingStateAsrPending   ProcessingState = "asr_pending"
+	ProcessingStateAsrRunning   ProcessingState = "asr_running"
+	ProcessingStateDone         ProcessingState = "done"
+	ProcessingStateFailed       ProcessingState = "failed"
 )
 
-func (jobs VideoJobs) GetProcessingState() ProcessingState {
-	if jobs.fetch.jobID == 0 {
-		return ProcessingStateNew
-	}
-	switch jobs.fetch.state {
-	case dbgen.JobStatePending:
-		return ProcessingStatePending
-	case dbgen.JobStateRunning:
-		return ProcessingStateRunning
-	case dbgen.JobStateDone:
-		if jobs.asr.jobID == 0 {
-			return ProcessingStateFailed
-		}
-		switch jobs.asr.state {
-		case dbgen.JobStateDone:
-			return ProcessingStateDone
-		case dbgen.JobStateFailed:
-			return ProcessingStateFailed
-		default:
-			return ProcessingStateRunning
-		}
-	default:
-		return ProcessingStateFailed
-	}
+type EnqueuedJob struct {
+	VideoDurationSecs int32 `json:"video_duration_secs"`
 }
 
-func (s *VideoService) GetVideoJobs(ctx context.Context, videoID int64) (VideoJobs, error) {
+type VideoProcess struct {
+	State        ProcessingState `json:"state"`
+	ErrorMessage string          `json:"error_message"`
+	Queue        []EnqueuedJob   `json:"queue"`
+}
+
+/**
+ * Just take an item with the largest job ID
+ */
+func getLatestJob(rows []dbgen.GetVideoJobsRow) *dbgen.GetVideoJobsRow {
+	if len(rows) == 0 {
+		return nil
+	}
+	result := &rows[0]
+	for i := range rows {
+		if rows[i].ID > result.ID {
+			result = &rows[i]
+		}
+	}
+	return result
+}
+
+func makeQueueForFetchJob(queue []dbgen.GetFetchJobQueueRow) []EnqueuedJob {
+	result := make([]EnqueuedJob, 0, len(queue))
+	for _, row := range queue {
+		result = append(result, EnqueuedJob{pgIntervalToInt32Seconds(&row.Duration)})
+	}
+	return result
+}
+
+func makeQueueForAsrJob(queue []dbgen.GetAsrJobQueueRow) []EnqueuedJob {
+	result := make([]EnqueuedJob, 0, len(queue))
+	for _, row := range queue {
+		result = append(result, EnqueuedJob{pgIntervalToInt32Seconds(&row.Duration)})
+	}
+	return result
+}
+
+func (s *VideoService) GetVideoProcess(ctx context.Context, videoID int64) (VideoProcess, error) {
 	rows, err := s.queries.GetVideoJobs(ctx, videoID)
 	if err != nil {
-		return VideoJobs{}, err
+		return VideoProcess{}, err
 	}
 	if len(rows) > 2 {
 		s.log.Error("too many video jobs", "videoID", videoID, "jobs", len(rows))
-		return VideoJobs{}, ErrCorruptedData
+		return VideoProcess{}, ErrCorruptedData
 	}
-	var fetchJob VideoJob
-	var asrJob VideoJob
-	for _, row := range rows {
-		switch row.Type {
+
+	latestJob := getLatestJob(rows)
+
+	if latestJob == nil {
+		return VideoProcess{
+			State: ProcessingStateNew,
+		}, nil
+	}
+
+	// Below is the handling of the case when at least one job exists for the video
+
+	if latestJob.State == dbgen.JobStateFailed {
+		errorMessage := ""
+		switch latestJob.Type {
 		case dbgen.JobTypeFetch:
-			fetchJob = VideoJob{
-				jobID: row.ID,
-				state: row.State,
-			}
+			errorMessage = "fetch fail"
 		case dbgen.JobTypeAsr:
-			asrJob = VideoJob{
-				jobID: row.ID,
-				state: row.State,
-			}
-		default:
-			s.log.Error("unknown job type", "videoID", videoID, "jobID", row.ID, "type", row.Type)
-			return VideoJobs{}, ErrCorruptedData
+			errorMessage = "asr fail"
 		}
+		return VideoProcess{
+			State:        ProcessingStateFailed,
+			ErrorMessage: errorMessage,
+		}, nil
 	}
-	s.log.Info("loaded video jobs", "videoID", videoID, "fetch", fetchJob.jobID, "fetch_state", fetchJob.state, "asr", asrJob.jobID, "asr_state", asrJob.state)
-	return VideoJobs{
-		fetch: fetchJob,
-		asr:   asrJob,
-	}, nil
+
+	// Below is the handling of the case when the video job hasn't failed.
+	// More specifically: the job is either pending, running, or done.
+
+	if latestJob.Type == dbgen.JobTypeFetch {
+		if latestJob.State == dbgen.JobStatePending {
+			queue, err := s.queries.GetFetchJobQueue(ctx, latestJob.CreatedAt)
+			if err != nil {
+				s.log.Error("failed to load Fetch job queue", "created_before", latestJob.CreatedAt, "err", err)
+				return VideoProcess{}, err
+			}
+			return VideoProcess{
+				State: ProcessingStateFetchPending,
+				Queue: makeQueueForFetchJob(queue),
+			}, nil
+		} else if latestJob.State == dbgen.JobStateRunning {
+			createdBefore := pgtype.Timestamptz{
+				Time:  time.Now(),
+				Valid: true,
+			}
+			// This Fetch job is already running.
+			// It will need to wait for other ASR jobs once it graduates from Fetch to ASR.
+			queue, err := s.queries.GetAsrJobQueue(ctx, createdBefore)
+			if err != nil {
+				s.log.Error("failed to load ASR job queue", "created_before", createdBefore, "err", err)
+				return VideoProcess{}, err
+			}
+			return VideoProcess{
+				State: ProcessingStateFetchRunning,
+				Queue: makeQueueForAsrJob(queue),
+			}, nil
+		} else {
+			// The only remaining option is 'done',
+			// but if Fetch is done,
+			// ASR job must be created under the same transaction
+			// and take over as 'the latest'.
+			s.log.Error("inconsistent Fetch job state", "job", latestJob.ID, "state", latestJob.State)
+			return VideoProcess{}, ErrCorruptedData
+		}
+	} else if latestJob.Type == dbgen.JobTypeAsr {
+		if latestJob.State == dbgen.JobStatePending {
+			queue, err := s.queries.GetAsrJobQueue(ctx, latestJob.CreatedAt)
+			if err != nil {
+				s.log.Error("failed to load ASR job queue", "created_before", latestJob.CreatedAt, "err", err)
+				return VideoProcess{}, err
+			}
+			return VideoProcess{
+				State: ProcessingStateAsrPending,
+				Queue: makeQueueForAsrJob(queue),
+			}, nil
+		} else if latestJob.State == dbgen.JobStateRunning {
+			return VideoProcess{
+				State: ProcessingStateAsrRunning,
+			}, nil
+		} else if latestJob.State == dbgen.JobStateDone {
+			return VideoProcess{
+				State: ProcessingStateDone,
+			}, nil
+		} else {
+			s.log.Error("unsupported ASR job state", "job", latestJob.ID, "state", latestJob.State)
+			return VideoProcess{}, ErrCorruptedData
+		}
+	} else {
+		s.log.Error("unsupported job type", "job", latestJob.ID, "type", latestJob.Type)
+		return VideoProcess{}, ErrCorruptedData
+	}
 }
 
-func (s *VideoService) CreateOrGetVideoJobs(ctx context.Context, videoID int64) (VideoJobs, error) {
-	existingJobs, err := s.GetVideoJobs(ctx, videoID)
-	if err != nil {
-		s.log.Error("failed to load existing jobs", "videoID", videoID, "err", err)
-		return VideoJobs{}, err
-	}
-
-	if existingJobs.GetProcessingState() != ProcessingStateNew {
-		return existingJobs, nil
-	}
-
+func (s *VideoService) createVideoProcess(ctx context.Context, videoID int64) (VideoProcess, error) {
 	byIDRow, err := s.queries.GetVideoByID(ctx, videoID)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
-			return VideoJobs{}, fmt.Errorf("video load fail: %w", err)
+			return VideoProcess{}, fmt.Errorf("video load fail: %w", err)
 		}
-		return VideoJobs{}, ErrNoSuchVideo
+		return VideoProcess{}, ErrNoSuchVideo
 	}
 
 	video, err := byIDRowToVideo(&byIDRow)
 	if err != nil {
 		s.log.Error("loaded video convert fail", "videoID", videoID, "err", err)
-		return VideoJobs{}, err
+		return VideoProcess{}, err
 	}
 
 	obstacle := video.ProcessingObstacle()
 	if obstacle != "" {
 		s.log.Error("not allowed to process video", "videoID", videoID, "obstacle", obstacle)
-		return VideoJobs{}, ErrUnprocessableVideo
+		return VideoProcess{}, ErrUnprocessableVideo
+	}
+
+	enqueued, err := s.queries.GetFetchJobQueue(ctx, pgtype.Timestamptz{
+		Time:  time.Now(),
+		Valid: true,
+	})
+	enqueuedSize := len(enqueued)
+	if enqueuedSize >= maxQueueSize {
+		s.log.Error("max processing queue size reached", "size", enqueuedSize)
+		return VideoProcess{
+			State: ProcessingStateAtCapacity,
+			Queue: makeQueueForFetchJob(enqueued),
+		}, nil
+	} else {
+		s.log.Info("creating Fetch job", "queue", enqueuedSize, "video", videoID)
 	}
 
 	fetchJobID, err := s.queries.CreateFetchJobIfAbsent(ctx, dbgen.CreateFetchJobIfAbsentParams{
@@ -274,29 +376,28 @@ func (s *VideoService) CreateOrGetVideoJobs(ctx context.Context, videoID int64) 
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
 			s.log.Error("failed to create fetch job", "videoID", videoID, "err", err)
-			return VideoJobs{}, err
+			return VideoProcess{}, err
 		}
 		// If pgx.ErrNoRows, then probably a concurrent insert succeeded first.
 		s.log.Warn("job insert returned nothing probably because conflict", "videoID", videoID)
-		alreadyExisting, readErr := s.GetVideoJobs(ctx, videoID)
-		if readErr != nil {
-			s.log.Error("re-read after insert fail failed too", "videoID", videoID, "readErr", readErr)
-			return VideoJobs{}, readErr
-		}
-		if alreadyExisting.GetProcessingState() == ProcessingStateNew {
-			s.log.Error("re-read after insert fail returned no jobs", "videoID", videoID)
-			return VideoJobs{}, err
-		}
-		s.log.Info("successful re-read after insert fail", "videoID", videoID, "fetch.jobID", alreadyExisting.fetch.jobID)
-		return alreadyExisting, nil
+		return s.GetVideoProcess(ctx, videoID)
+	}
+	s.log.Info("Fetch job created", "job", fetchJobID)
+	return s.GetVideoProcess(ctx, videoID)
+}
+
+func (s *VideoService) GetOrCreateVideoProcess(ctx context.Context, videoID int64) (VideoProcess, error) {
+	processVideo, err := s.GetVideoProcess(ctx, videoID)
+	if err != nil {
+		s.log.Error("failed to load existing jobs", "videoID", videoID, "err", err)
+		return VideoProcess{}, err
 	}
 
-	return VideoJobs{
-		fetch: VideoJob{
-			jobID: fetchJobID,
-			state: dbgen.JobStatePending,
-		},
-	}, nil
+	if processVideo.State != ProcessingStateNew {
+		return processVideo, nil
+	}
+
+	return s.createVideoProcess(ctx, videoID)
 }
 
 type TranscriptionInfo struct {

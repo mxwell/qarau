@@ -17,7 +17,7 @@ type Video struct {
 	ChannelID       string
 	ChannelTitle    string
 	PublishedAt     time.Time
-	DurationSecs    int
+	DurationSecs    int32
 	DefaultLang     string
 	Embeddable      bool
 	ThumbnailURL    string
@@ -45,7 +45,7 @@ type APIInfo struct {
 	OnlineVideoID   string `json:"online_video_id"`
 	Title           string `json:"title"`
 	ChannelTitle    string `json:"channel_title"`
-	DurationSecs    int    `json:"duration_secs"`
+	DurationSecs    int32  `json:"duration_secs"`
 	DefaultLang     string `json:"default_lang"`
 	Embeddable      bool   `json:"embeddable"`
 	ThumbnailURL    string `json:"thumbnail_url"`
