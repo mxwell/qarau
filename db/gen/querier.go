@@ -18,6 +18,7 @@ type Querier interface {
 	CreateFetchJobIfAbsent(ctx context.Context, arg CreateFetchJobIfAbsentParams) (int64, error)
 	CreateVideo(ctx context.Context, arg CreateVideoParams) (int64, error)
 	DeleteWordsByTranscriptionId(ctx context.Context, transcriptionID int64) error
+	FindSeqByStartMs(ctx context.Context, arg FindSeqByStartMsParams) (int32, error)
 	GetAsrJobQueue(ctx context.Context, createdBefore pgtype.Timestamptz) ([]GetAsrJobQueueRow, error)
 	GetAudioBlob(ctx context.Context, videoID int64) (GetAudioBlobRow, error)
 	GetFetchJobQueue(ctx context.Context, createdBefore pgtype.Timestamptz) ([]GetFetchJobQueueRow, error)

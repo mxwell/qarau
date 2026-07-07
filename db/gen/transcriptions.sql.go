@@ -18,6 +18,27 @@ func (q *Queries) DeleteWordsByTranscriptionId(ctx context.Context, transcriptio
 	return err
 }
 
+const findSeqByStartMs = `-- name: FindSeqByStartMs :one
+SELECT seq FROM words
+WHERE
+    transcription_id = $1 AND
+    start_ms >= $2
+ORDER BY seq
+LIMIT 1
+`
+
+type FindSeqByStartMsParams struct {
+	TranscriptionID int64 `json:"transcription_id"`
+	StartMs         int32 `json:"start_ms"`
+}
+
+func (q *Queries) FindSeqByStartMs(ctx context.Context, arg FindSeqByStartMsParams) (int32, error) {
+	row := q.db.QueryRow(ctx, findSeqByStartMs, arg.TranscriptionID, arg.StartMs)
+	var seq int32
+	err := row.Scan(&seq)
+	return seq, err
+}
+
 const getTranscription = `-- name: GetTranscription :one
 SELECT id, video_id, model, created_at FROM transcriptions
 WHERE id = $1

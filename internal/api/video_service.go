@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -17,6 +18,7 @@ var (
 	ErrCorruptedData       = errors.New("corrupted data")
 	ErrUnprocessableVideo  = errors.New("unprocessable video")
 	ErrNoSuchTranscription = errors.New("no transcription")
+	ErrNoSuchSeq           = errors.New("no seq")
 )
 
 type VideoService struct {
@@ -45,6 +47,7 @@ func NewVideoService(log *slog.Logger, queries *dbgen.Queries, ytClient *YtClien
 const (
 	microsecondsPerSecond = 1_000_000
 	maxQueueSize          = 5
+	seqBeyondEnd          = math.MaxInt32
 )
 
 func microsToInt32Seconds(micros int64) int32 {
@@ -425,6 +428,21 @@ func (s *VideoService) GetTranscriptions(ctx context.Context, videoID int64) ([]
 type SubtitleSpan struct {
 	Items []subtitles.Subtitle `json:"items"`
 	Next  int32                `json:"next"`
+}
+
+func (s *VideoService) FindSeqByStartMs(
+	ctx context.Context,
+	transcriptionID int64,
+	startMs int32,
+) (int32, error) {
+	seq, err := s.queries.FindSeqByStartMs(ctx, dbgen.FindSeqByStartMsParams{
+		TranscriptionID: transcriptionID,
+		StartMs:         startMs,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, ErrNoSuchSeq
+	}
+	return seq, err
 }
 
 func (s *VideoService) GetSubtitles(ctx context.Context, transcriptionID int64, startSeq int32, wordCount int32, minConfidence int16) (SubtitleSpan, error) {

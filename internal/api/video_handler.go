@@ -127,11 +127,47 @@ func (h *VideoHandler) Subtitles(c *fiber.Ctx) error {
 		h.log.Info("negative transcriptionID", "transcriptionID", transcriptionID)
 		return badRequest(c, "invalid transcription_id")
 	}
-	seq := c.QueryInt("seq", 0)
-	if seq < 0 || seq > math.MaxInt32 {
-		h.log.Info("invalid seq", "seq", seq)
-		return badRequest(c, "invalid seq")
+
+	seq := int32(0)
+
+	if startMsStr := c.Query("start_ms"); startMsStr != "" {
+		if seqStr := c.Query("seq"); seqStr != "" {
+			h.log.Info("both start_ms and seq set in params", "start_ms", startMsStr, "seq", seqStr)
+			return badRequest(c, "provide either seq or start_ms, not both")
+		}
+		startMs, err := strconv.ParseInt(startMsStr, 10, 64)
+		if err != nil {
+			h.log.Info("failed to parse start_ms", "param", startMsStr, "err", err)
+			return badRequest(c, "invalid start_ms")
+		}
+		if startMs < 0 || startMs > math.MaxInt32 {
+			h.log.Info("invalid start_ms", "start_ms", startMs)
+			return badRequest(c, "invalid start_ms")
+		}
+		seq, err = h.svc.FindSeqByStartMs(c.UserContext(), transcriptionID, int32(startMs))
+		if err != nil {
+			if errors.Is(err, ErrNoSuchSeq) {
+				// No seq found => set seq to max and
+				// let GetSubtitles() tell apart 'no transcription' Vs 'no more words'
+				seq = seqBeyondEnd
+			} else {
+				h.log.Error("seq search by start_ms failed", "transcriptionID", transcriptionID, "start_ms", startMs, "err", err)
+				return internalError(c, "internal error")
+			}
+		}
+	} else if seqStr := c.Query("seq"); seqStr != "" {
+		seqValue64, err := strconv.ParseInt(seqStr, 10, 64)
+		if err != nil {
+			h.log.Info("failed to parse seq", "param", seqStr, "err", err)
+			return badRequest(c, "invalid seq")
+		}
+		if seqValue64 < 0 || seqValue64 > seqBeyondEnd {
+			h.log.Info("invalid seq", "seq", seqValue64)
+			return badRequest(c, "invalid seq")
+		}
+		seq = int32(seqValue64)
 	}
+
 	wordCount := c.QueryInt("word_count", 100)
 	if wordCount <= 0 || wordCount > 1000 {
 		h.log.Info("invalid word_count", "word_count", wordCount)
@@ -146,7 +182,7 @@ func (h *VideoHandler) Subtitles(c *fiber.Ctx) error {
 	subtitleSpan, err := h.svc.GetSubtitles(
 		c.UserContext(),
 		transcriptionID,
-		int32(seq),
+		seq,
 		int32(wordCount),
 		int16(confidence),
 	)

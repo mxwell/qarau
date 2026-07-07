@@ -46,3 +46,11 @@ WHERE
     seq >= sqlc.arg('start_seq')
 ORDER BY seq ASC
 LIMIT sqlc.arg('word_count');
+
+-- name: FindSeqByStartMs :one
+SELECT seq FROM words
+WHERE
+    transcription_id = sqlc.arg('transcription_id') AND
+    start_ms >= sqlc.arg('start_ms')
+ORDER BY seq
+LIMIT 1;
