@@ -3,6 +3,8 @@ package api
 import (
 	"fmt"
 	"time"
+
+	constants "github.com/mxwell/qarau/internal/common"
 )
 
 /*
@@ -26,8 +28,6 @@ type Video struct {
 	LoadedFromDB    bool
 }
 
-const secondsPer2H = 2 * 60 * 60
-
 func (v *Video) ProcessingObstacle() string {
 	if !v.Embeddable {
 		return "the video can't be embedded"
@@ -35,8 +35,12 @@ func (v *Video) ProcessingObstacle() string {
 	if v.DefaultLang != "kk" {
 		return "the video language is not Kazakh"
 	}
-	if v.DurationSecs > secondsPer2H {
-		return fmt.Sprintf("the video is longer than %d seconds", secondsPer2H)
+	if v.DurationSecs > constants.MaxDurationSecs {
+		return fmt.Sprintf(
+			"the video duration is too long: %d > %d seconds",
+			v.DurationSecs,
+			constants.MaxDurationSecs,
+		)
 	}
 	return ""
 }

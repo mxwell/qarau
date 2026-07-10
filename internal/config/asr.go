@@ -12,15 +12,21 @@ import (
 )
 
 type ASRConfig struct {
-	WorkerID    string
-	APIHost     string
-	APIPort     uint16
-	WorkingDir  string
-	RemoveFiles bool
-	FfmpegTool  string
-	VoskModel   string
-	LogLevel    slog.Level
+	WorkerID     string
+	APIHost      string
+	APIPort      uint16
+	WorkingDir   string
+	RemoveFiles  bool
+	FfmpegTool   string
+	VoskModel    string
+	ElevenApiKey string
+	LogLevel     slog.Level
 }
+
+var (
+	ErrOneOfVoskAndElevenLabs = errors.New("ASR config error: exactly one of Vosk model and ElevenLabs API key must be specified")
+	ErrApiKeyNeedsPrefix      = errors.New("ASR config error: API key must start with sk_")
+)
 
 func LoadASR() (ASRConfig, error) {
 	v := viper.New()
@@ -44,14 +50,15 @@ func LoadASR() (ASRConfig, error) {
 	}
 
 	cfg := ASRConfig{
-		WorkerID:    v.GetString("WORKER_ID"),
-		APIHost:     v.GetString("API_HOST"),
-		APIPort:     v.GetUint16("API_PORT"),
-		WorkingDir:  v.GetString("WORKING_DIR"),
-		RemoveFiles: v.GetUint8("REMOVE_FILES") > 0,
-		FfmpegTool:  v.GetString("FFMPEG"),
-		VoskModel:   v.GetString("VOSK_MODEL"),
-		LogLevel:    logLevel,
+		WorkerID:     v.GetString("WORKER_ID"),
+		APIHost:      v.GetString("API_HOST"),
+		APIPort:      v.GetUint16("API_PORT"),
+		WorkingDir:   v.GetString("WORKING_DIR"),
+		RemoveFiles:  v.GetUint8("REMOVE_FILES") > 0,
+		FfmpegTool:   v.GetString("FFMPEG"),
+		VoskModel:    v.GetString("VOSK_MODEL"),
+		ElevenApiKey: v.GetString("ELEVEN_API_KEY"),
+		LogLevel:     logLevel,
 	}
 
 	if !strings.HasPrefix(cfg.WorkerID, "asr_") {
@@ -70,8 +77,19 @@ func LoadASR() (ASRConfig, error) {
 	if !strings.HasPrefix(cfg.FfmpegTool, "/") {
 		return ASRConfig{}, fmt.Errorf("ASR config error: invalid ffmpeg path '%v'", cfg.FfmpegTool)
 	}
-	if !strings.HasPrefix(cfg.VoskModel, "/") {
-		return ASRConfig{}, fmt.Errorf("ASR config error: invalid Vosk model path '%v'", cfg.VoskModel)
+	if cfg.VoskModel != "" {
+		if !strings.HasPrefix(cfg.VoskModel, "/") {
+			return ASRConfig{}, fmt.Errorf("ASR config error: invalid Vosk model path '%v'", cfg.VoskModel)
+		}
+		if cfg.ElevenApiKey != "" {
+			return ASRConfig{}, ErrOneOfVoskAndElevenLabs
+		}
+	} else if cfg.ElevenApiKey != "" {
+		if !strings.HasPrefix(cfg.ElevenApiKey, "sk_") {
+			return ASRConfig{}, ErrApiKeyNeedsPrefix
+		}
+	} else {
+		return ASRConfig{}, ErrOneOfVoskAndElevenLabs
 	}
 
 	return cfg, nil

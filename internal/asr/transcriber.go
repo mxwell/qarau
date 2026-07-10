@@ -10,6 +10,7 @@ import (
 
 	vosk "github.com/alphacep/vosk-api/go"
 	qarauv1 "github.com/mxwell/qarau/gen/qarau/v1"
+	constants "github.com/mxwell/qarau/internal/common"
 )
 
 type Transcriber interface {
@@ -64,6 +65,14 @@ func (t *voskTranscriber) Transcribe(
 	durationSecs int32,
 	sampleRate float64,
 ) (*qarauv1.Transcription, error) {
+	if durationSecs > constants.MaxDurationSecs {
+		return nil, fmt.Errorf(
+			"too long duration for ASR: %d > %d seconds",
+			durationSecs,
+			constants.MaxDurationSecs,
+		)
+	}
+
 	rec, err := vosk.NewRecognizer(t.model, sampleRate)
 	if err != nil {
 		return nil, err

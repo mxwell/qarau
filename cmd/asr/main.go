@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -12,9 +13,28 @@ import (
 	qarauv1 "github.com/mxwell/qarau/gen/qarau/v1"
 	"github.com/mxwell/qarau/internal/asr"
 	"github.com/mxwell/qarau/internal/config"
+	"github.com/mxwell/qarau/internal/eleven"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
+
+func createTranscriber(logger *slog.Logger, cfg config.ASRConfig) (asr.Transcriber, error) {
+	if cfg.VoskModel != "" {
+		result, err := asr.NewVoskTranscriber(logger, cfg.VoskModel)
+		if err == nil {
+			logger.Info("created Vosk transcriber", "model", cfg.VoskModel)
+		}
+		return result, err
+	} else if cfg.ElevenApiKey != "" {
+		result, err := eleven.NewElevenTranscriber(logger, cfg.ElevenApiKey)
+		if err == nil {
+			logger.Info("created Eleven transcriber")
+		}
+		return result, err
+	} else {
+		return nil, errors.New("no transcriber configured")
+	}
+}
 
 func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -51,7 +71,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	transcriber, err := asr.NewVoskTranscriber(logger, cfg.VoskModel)
+	transcriber, err := createTranscriber(logger, cfg)
 	if err != nil {
 		return err
 	}
