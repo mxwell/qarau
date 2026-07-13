@@ -44,3 +44,16 @@ psql -h localhost -p 5432 -U postgres -d qaraudb < extract_audio_blog.sql | xxd 
 ```
 
 There is an extra byte at the start, that is removed by `tail`. The cause is not clear.
+
+## Init prod DB
+
+```
+sudo -u postgres psql
+CREATE USER qarau WITH PASSWORD '***secret***';
+CREATE DATABASE qaraudb OWNER qarau;
+
+scp goose qarau.khairulin.com:/qarau-bundle/db-setup/goose
+scp -r db/migrations qarau.khairulin.com:/qarau-bundle/db-setup/migrations
+
+export DB_URL=postgres://qarau:***secret***@localhost:5432/qaraudb?sslmode=disable
+./goose -dir migrations postgres $DB_URL up

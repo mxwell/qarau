@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log/slog"
 	"net"
@@ -13,6 +14,7 @@ import (
 	"github.com/mxwell/qarau/internal/config"
 	"github.com/mxwell/qarau/internal/fetch"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -32,8 +34,18 @@ func run() error {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &logOptions))
 	logger.Info("fetch starting")
 
-	dialOptions := []grpc.DialOption{
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	var dialOptions []grpc.DialOption
+	if cfg.APIPort == 443 {
+		creds := credentials.NewTLS(&tls.Config{
+			ServerName: cfg.APIHost,
+		})
+		dialOptions = []grpc.DialOption{
+			grpc.WithTransportCredentials(creds),
+		}
+	} else {
+		dialOptions = []grpc.DialOption{
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		}
 	}
 
 	target := net.JoinHostPort(cfg.APIHost, fmt.Sprint(cfg.APIPort))

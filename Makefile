@@ -41,6 +41,9 @@ migrate-down:
 build:
 	go build -o bin/ ./cmd/...
 
+fetch_build_arm:
+	GOOS=linux GOARCH=arm64 go build -o bin/ ./cmd/fetch
+
 run_pg_dev:
 	docker run --rm --name postgres_dev -e POSTGRES_PASSWORD=admin -e POSTGRES_DB=qaraudb -p 5432:5432 -v postgres-data:/var/lib/postgresql -d postgres:18-bookworm
 

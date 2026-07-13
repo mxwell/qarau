@@ -56,7 +56,7 @@ func LoadFetch() (FetchConfig, error) {
 	if len(cfg.APIHost) == 0 {
 		return FetchConfig{}, errors.New("fetch config error: empty API host")
 	}
-	if cfg.APIPort < 1024 {
+	if cfg.APIPort <= 0 {
 		return FetchConfig{}, fmt.Errorf("fetch config error: invalid API port %d", cfg.APIPort)
 	}
 	if len(cfg.Tool) == 0 {
