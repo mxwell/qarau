@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	dbgen "github.com/mxwell/qarau/db/gen"
+	"github.com/mxwell/qarau/internal/quota"
 	"github.com/mxwell/qarau/internal/subtitles"
 )
 
@@ -197,10 +198,16 @@ type EnqueuedJob struct {
 	VideoDurationSecs int32 `json:"video_duration_secs"`
 }
 
+type QuotaStatus struct {
+	Day         string `json:"day"`
+	UsedPercent int16  `json:"used_percent"`
+}
+
 type VideoProcess struct {
 	State        ProcessingState `json:"state"`
 	ErrorMessage string          `json:"error_message"`
 	Queue        []EnqueuedJob   `json:"queue"`
+	AsrQuota     QuotaStatus     `json:"asr_quota"`
 }
 
 /**
@@ -233,6 +240,24 @@ func makeQueueForAsrJob(queue []dbgen.GetAsrJobQueueRow) []EnqueuedJob {
 		result = append(result, EnqueuedJob{pgIntervalToInt32Seconds(&row.Duration)})
 	}
 	return result
+}
+
+func (s *VideoService) loadQuota(ctx context.Context) (QuotaStatus, error) {
+	today := quota.GetTodayForQuota()
+	usedSeconds, err := s.queries.GetAsrQuota(ctx, today)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return QuotaStatus{
+				Day:         quota.PrintQuotaDate(today),
+				UsedPercent: 0,
+			}, nil
+		}
+		return QuotaStatus{}, err
+	}
+	return QuotaStatus{
+		Day:         quota.PrintQuotaDate(today),
+		UsedPercent: quota.CalculateUsedPercent(usedSeconds),
+	}, nil
 }
 
 func (s *VideoService) GetVideoProcess(ctx context.Context, videoID int64) (VideoProcess, error) {
@@ -272,6 +297,12 @@ func (s *VideoService) GetVideoProcess(ctx context.Context, videoID int64) (Vide
 	// Below is the handling of the case when the video job hasn't failed.
 	// More specifically: the job is either pending, running, or done.
 
+	quota, err := s.loadQuota(ctx)
+	if err != nil {
+		s.log.Error("failed to load quota status", "err", err)
+		return VideoProcess{}, err
+	}
+
 	if latestJob.Type == dbgen.JobTypeFetch {
 		if latestJob.State == dbgen.JobStatePending {
 			queue, err := s.queries.GetFetchJobQueue(ctx, latestJob.CreatedAt)
@@ -280,8 +311,9 @@ func (s *VideoService) GetVideoProcess(ctx context.Context, videoID int64) (Vide
 				return VideoProcess{}, err
 			}
 			return VideoProcess{
-				State: ProcessingStateFetchPending,
-				Queue: makeQueueForFetchJob(queue),
+				State:    ProcessingStateFetchPending,
+				Queue:    makeQueueForFetchJob(queue),
+				AsrQuota: quota,
 			}, nil
 		} else if latestJob.State == dbgen.JobStateRunning {
 			createdBefore := pgtype.Timestamptz{
@@ -296,8 +328,9 @@ func (s *VideoService) GetVideoProcess(ctx context.Context, videoID int64) (Vide
 				return VideoProcess{}, err
 			}
 			return VideoProcess{
-				State: ProcessingStateFetchRunning,
-				Queue: makeQueueForAsrJob(queue),
+				State:    ProcessingStateFetchRunning,
+				Queue:    makeQueueForAsrJob(queue),
+				AsrQuota: quota,
 			}, nil
 		} else {
 			// The only remaining option is 'done',
@@ -315,8 +348,9 @@ func (s *VideoService) GetVideoProcess(ctx context.Context, videoID int64) (Vide
 				return VideoProcess{}, err
 			}
 			return VideoProcess{
-				State: ProcessingStateAsrPending,
-				Queue: makeQueueForAsrJob(queue),
+				State:    ProcessingStateAsrPending,
+				Queue:    makeQueueForAsrJob(queue),
+				AsrQuota: quota,
 			}, nil
 		} else if latestJob.State == dbgen.JobStateRunning {
 			return VideoProcess{

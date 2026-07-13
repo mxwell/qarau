@@ -20,6 +20,7 @@ type Querier interface {
 	DeleteWordsByTranscriptionId(ctx context.Context, transcriptionID int64) error
 	FindSeqByStartMs(ctx context.Context, arg FindSeqByStartMsParams) (int32, error)
 	GetAsrJobQueue(ctx context.Context, createdBefore pgtype.Timestamptz) ([]GetAsrJobQueueRow, error)
+	GetAsrQuota(ctx context.Context, day pgtype.Date) (int32, error)
 	GetAudioBlob(ctx context.Context, videoID int64) (GetAudioBlobRow, error)
 	GetFetchJobQueue(ctx context.Context, createdBefore pgtype.Timestamptz) ([]GetFetchJobQueueRow, error)
 	GetJob(ctx context.Context, jobID int64) (GetJobRow, error)
@@ -33,6 +34,7 @@ type Querier interface {
 	MarkJobDone(ctx context.Context, arg MarkJobDoneParams) (int64, error)
 	MarkJobFailed(ctx context.Context, arg MarkJobFailedParams) (int64, error)
 	UnlockJob(ctx context.Context, arg UnlockJobParams) (int64, error)
+	UpsertAsrQuota(ctx context.Context, arg UpsertAsrQuotaParams) (int32, error)
 	UpsertTranscription(ctx context.Context, arg UpsertTranscriptionParams) (int64, error)
 }
 

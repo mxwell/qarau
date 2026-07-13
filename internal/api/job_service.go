@@ -12,6 +12,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	dbgen "github.com/mxwell/qarau/db/gen"
 	qarauv1 "github.com/mxwell/qarau/gen/qarau/v1"
+	constants "github.com/mxwell/qarau/internal/common"
+	"github.com/mxwell/qarau/internal/quota"
 )
 
 type JobService struct {
@@ -69,6 +71,22 @@ func prepareJobPayload(jobType qarauv1.JobType, row dbgen.ClaimJobRow) (*qarauv1
 	}
 }
 
+func (s *JobService) checkQuotaOk(ctx context.Context) (bool, error) {
+	usedSeconds, err := s.queries.GetAsrQuota(ctx, quota.GetTodayForQuota())
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return true, nil
+		}
+		s.log.Error("failed to get asr quota", "err", err)
+		return false, err
+	}
+	ok := usedSeconds < constants.AsrApiDailyQuotaSeconds
+	if !ok {
+		s.log.Info("daily asr api quota exhausted", "used", usedSeconds, "quota", constants.AsrApiDailyQuotaSeconds)
+	}
+	return ok, nil
+}
+
 func (s *JobService) LeaseJob(ctx context.Context, request *qarauv1.LeaseJobRequest) (*qarauv1.LeaseJobResponse, error) {
 	if len(request.WorkerId) == 0 {
 		return nil, errors.New("empty worker ID")
@@ -82,6 +100,16 @@ func (s *JobService) LeaseJob(ctx context.Context, request *qarauv1.LeaseJobRequ
 	lockPeriod := 5 * time.Minute
 	if jobType == dbgen.JobTypeAsr {
 		lockPeriod = 60 * time.Minute
+	}
+
+	if jobType == dbgen.JobTypeAsr {
+		ok, err := s.checkQuotaOk(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return &qarauv1.LeaseJobResponse{}, nil
+		}
 	}
 
 	lockedUntil := pgtype.Timestamptz{
@@ -204,6 +232,14 @@ func (s *JobService) GetAudioBlob(ctx context.Context, videoID int64) (AudioBlob
 	}, nil
 }
 
+func (s *JobService) getVideoDuration(ctx context.Context, videoID int64) (int32, error) {
+	video, err := s.queries.GetVideoByID(ctx, videoID)
+	if err != nil {
+		return 0, err
+	}
+	return int32((video.Duration.Microseconds + microsecondsPerSecond - 1) / microsecondsPerSecond), nil
+}
+
 /*
  * The method does several things under 1 transaction:
  * - creates a new transription (or replaces old transcription by the same model)
@@ -212,6 +248,11 @@ func (s *JobService) GetAudioBlob(ctx context.Context, videoID int64) (AudioBlob
  * - marks the ASR job done
  */
 func (s *JobService) CompleteAsrJob(ctx context.Context, workerID string, jobID int64, videoID int64, transcription *qarauv1.Transcription) error {
+	usedSeconds, err := s.getVideoDuration(ctx, videoID)
+	if err != nil {
+		return err
+	}
+
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -268,7 +309,16 @@ func (s *JobService) CompleteAsrJob(ctx context.Context, workerID string, jobID 
 		return err
 	}
 
-	s.log.Info("transcription is stored to DB", "job", jobID, "transcription", transcriptionID, "words", len(transcription.Words))
+	_, err = qtx.UpsertAsrQuota(ctx, dbgen.UpsertAsrQuotaParams{
+		Day:         quota.GetTodayForQuota(),
+		UsedSeconds: usedSeconds,
+	})
+	if err != nil {
+		s.log.Error("failed to upsert ASR quota", "job", jobID, "err", err)
+		return err
+	}
+
+	s.log.Info("transcription is stored to DB", "job", jobID, "transcription", transcriptionID, "words", len(transcription.Words), "used_secs", usedSeconds)
 	return tx.Commit(ctx)
 }
 

@@ -97,6 +97,11 @@ func (ns NullJobType) Value() (driver.Value, error) {
 	return string(ns.JobType), nil
 }
 
+type AsrQuotum struct {
+	Day         pgtype.Date `json:"day"`
+	UsedSeconds int32       `json:"used_seconds"`
+}
+
 type AudioBlob struct {
 	VideoID   int64              `json:"video_id"`
 	Content   []byte             `json:"content"`
