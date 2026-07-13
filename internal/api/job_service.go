@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	dbgen "github.com/mxwell/qarau/db/gen"
 	qarauv1 "github.com/mxwell/qarau/gen/qarau/v1"
-	constants "github.com/mxwell/qarau/internal/common"
+	"github.com/mxwell/qarau/internal/constants"
 	"github.com/mxwell/qarau/internal/quota"
 )
 

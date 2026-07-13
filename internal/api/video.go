@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	constants "github.com/mxwell/qarau/internal/common"
+	"github.com/mxwell/qarau/internal/constants"
 )
 
 /*

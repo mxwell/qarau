@@ -20,6 +20,7 @@ type ASRConfig struct {
 	FfmpegTool   string
 	VoskModel    string
 	ElevenApiKey string
+	LogDir       string
 	LogLevel     slog.Level
 }
 
@@ -38,6 +39,7 @@ func LoadASR() (ASRConfig, error) {
 	v.SetDefault("API_HOST", "localhost")
 	v.SetDefault("API_PORT", 7991)
 	v.SetDefault("REMOVE_FILES", 1)
+	v.SetDefault("LOG_DIR", "logs")
 	v.SetDefault("LOG_LEVEL", "INFO")
 
 	if err := v.ReadInConfig(); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -58,6 +60,7 @@ func LoadASR() (ASRConfig, error) {
 		FfmpegTool:   v.GetString("FFMPEG"),
 		VoskModel:    v.GetString("VOSK_MODEL"),
 		ElevenApiKey: v.GetString("ELEVEN_API_KEY"),
+		LogDir:       v.GetString("LOG_DIR"),
 		LogLevel:     logLevel,
 	}
 
@@ -73,6 +76,9 @@ func LoadASR() (ASRConfig, error) {
 	}
 	if !filepath.IsAbs(cfg.WorkingDir) {
 		return ASRConfig{}, fmt.Errorf("ASR config error: invalid working dir '%v'", cfg.WorkingDir)
+	}
+	if cfg.LogDir == "" {
+		return ASRConfig{}, fmt.Errorf("ASR config error: empty log dir")
 	}
 	if !strings.HasPrefix(cfg.FfmpegTool, "/") {
 		return ASRConfig{}, fmt.Errorf("ASR config error: invalid ffmpeg path '%v'", cfg.FfmpegTool)

@@ -10,7 +10,7 @@ import (
 
 	vosk "github.com/alphacep/vosk-api/go"
 	qarauv1 "github.com/mxwell/qarau/gen/qarau/v1"
-	constants "github.com/mxwell/qarau/internal/common"
+	"github.com/mxwell/qarau/internal/constants"
 )
 
 type Transcriber interface {

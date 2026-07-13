@@ -39,9 +39,13 @@ func Loop[Job IdentifiableJob](ctx context.Context, logger *slog.Logger, claimer
 	backOffPeriod := initialBackOffPeriod
 
 	pollPeriod := 30 * time.Second
+	logCounter := 0
 
 	for {
-		logger.Info("trying to claim job")
+		if logCounter == 0 {
+			logger.Info("trying to claim job")
+			logCounter += 1
+		}
 		action, job := claimerWorker.Claim(ctx)
 		switch action {
 		case WaitNoJob:
@@ -68,5 +72,6 @@ func Loop[Job IdentifiableJob](ctx context.Context, logger *slog.Logger, claimer
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
+		logCounter = 0
 	}
 }

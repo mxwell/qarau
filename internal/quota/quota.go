@@ -4,17 +4,22 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
-	constants "github.com/mxwell/qarau/internal/common"
-)
-
-var (
-	kz = time.FixedZone("KZ", 5*60*60)
+	"github.com/mxwell/qarau/internal/constants"
 )
 
 func GetDayForQuota(t time.Time) pgtype.Date {
-	kzTime := t.In(kz)
+	kzTime := t.In(constants.KZ_TZ)
 	return pgtype.Date{
-		Time:  time.Date(kzTime.Year(), kzTime.Month(), kzTime.Day(), 0, 0, 0, 0, kz),
+		Time: time.Date(
+			kzTime.Year(),
+			kzTime.Month(),
+			kzTime.Day(),
+			0,
+			0,
+			0,
+			0,
+			constants.KZ_TZ,
+		),
 		Valid: true,
 	}
 }

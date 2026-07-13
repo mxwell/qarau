@@ -45,6 +45,12 @@ psql -h localhost -p 5432 -U postgres -d qaraudb < extract_audio_blog.sql | xxd 
 
 There is an extra byte at the start, that is removed by `tail`. The cause is not clear.
 
+## ASR worker
+
+```
+LD_LIBRARY_PATH=$PWD/vosk-api/src ./bin/asr
+```
+
 ## Init prod DB
 
 ```

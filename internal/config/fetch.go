@@ -17,6 +17,7 @@ type FetchConfig struct {
 	APIPort    uint16
 	Tool       string
 	WorkingDir string
+	LogDir     string
 	LogLevel   slog.Level
 }
 
@@ -29,6 +30,7 @@ func LoadFetch() (FetchConfig, error) {
 
 	v.SetDefault("API_HOST", "localhost")
 	v.SetDefault("API_PORT", 7991)
+	v.SetDefault("LOG_DIR", "logs")
 	v.SetDefault("LOG_LEVEL", "INFO")
 
 	if err := v.ReadInConfig(); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -46,6 +48,7 @@ func LoadFetch() (FetchConfig, error) {
 		APIPort:    v.GetUint16("API_PORT"),
 		Tool:       v.GetString("TOOL"),
 		WorkingDir: v.GetString("WORKING_DIR"),
+		LogDir:     v.GetString("LOG_DIR"),
 		LogLevel:   logLevel,
 	}
 
@@ -64,6 +67,9 @@ func LoadFetch() (FetchConfig, error) {
 	}
 	if !filepath.IsAbs(cfg.WorkingDir) {
 		return FetchConfig{}, fmt.Errorf("fetch config error: invalid working dir '%v'", cfg.WorkingDir)
+	}
+	if cfg.LogDir == "" {
+		return FetchConfig{}, fmt.Errorf("fetch config error: empty log dir")
 	}
 
 	return cfg, nil

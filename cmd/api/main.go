@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net"
 	"os"
 	"os/signal"
@@ -28,14 +27,14 @@ func run() error {
 
 	cfg, err := config.LoadAPI()
 	if err != nil {
-		fmt.Printf("failed to load API config: %v\n", err.Error())
-		return err
+		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	logOptions := slog.HandlerOptions{
-		Level: cfg.LogLevel,
+	logger, logCloser, err := logging.NewDailyWriter(cfg.LogDir, "api", cfg.LogLevel)
+	if err != nil {
+		return fmt.Errorf("failed to init logger: %w", err)
 	}
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &logOptions))
+	defer logCloser.Close()
 	logger.Info("api starting")
 
 	db, err := pgxpool.New(ctx, cfg.DBUrl)
@@ -74,7 +73,9 @@ func run() error {
 	)
 
 	// Fiber app
-	app := fiber.New()
+	app := fiber.New(fiber.Config{
+		DisableStartupMessage: true,
+	})
 	app.Use(logging.FiberRequestLogger(logger))
 
 	ytClient, err := api.NewYtClient(ctx, logger, cfg.YTApiKey)

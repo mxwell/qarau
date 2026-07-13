@@ -14,7 +14,7 @@ import (
 
 	qarauv1 "github.com/mxwell/qarau/gen/qarau/v1"
 	"github.com/mxwell/qarau/internal/asr"
-	constants "github.com/mxwell/qarau/internal/common"
+	"github.com/mxwell/qarau/internal/constants"
 )
 
 type elevenTranscriber struct {

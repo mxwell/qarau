@@ -14,6 +14,7 @@ import (
 	"github.com/mxwell/qarau/internal/asr"
 	"github.com/mxwell/qarau/internal/config"
 	"github.com/mxwell/qarau/internal/eleven"
+	"github.com/mxwell/qarau/internal/logging"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -42,14 +43,14 @@ func run() error {
 
 	cfg, err := config.LoadASR()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to load ASR config: %v\n", err)
-		return err
+		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	logOptions := slog.HandlerOptions{
-		Level: cfg.LogLevel,
+	logger, logCloser, err := logging.NewDailyWriter(cfg.LogDir, "asr", cfg.LogLevel)
+	if err != nil {
+		return fmt.Errorf("failed to init logger: %w", err)
 	}
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &logOptions))
+	defer logCloser.Close()
 	logger.Info("ASR worker starting")
 
 	dialOptions := []grpc.DialOption{

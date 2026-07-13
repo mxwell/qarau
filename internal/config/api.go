@@ -17,6 +17,7 @@ type APIConfig struct {
 	GracePeriod time.Duration
 	DBUrl       string
 	YTApiKey    string
+	LogDir      string
 	LogLevel    slog.Level
 }
 
@@ -31,6 +32,7 @@ func LoadAPI() (APIConfig, error) {
 	v.SetDefault("GRPC_PORT", 7991)
 	v.SetDefault("REST_PORT", 7992)
 	v.SetDefault("GRACE_PERIOD", "3s")
+	v.SetDefault("LOG_DIR", "logs")
 	v.SetDefault("LOG_LEVEL", "INFO")
 
 	if err := v.ReadInConfig(); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -48,6 +50,7 @@ func LoadAPI() (APIConfig, error) {
 		GracePeriod: v.GetDuration("GRACE_PERIOD"),
 		DBUrl:       v.GetString("DB_URL"),
 		YTApiKey:    v.GetString("YT_API_KEY"),
+		LogDir:      v.GetString("LOG_DIR"),
 		LogLevel:    logLevel,
 	}
 
@@ -65,6 +68,9 @@ func LoadAPI() (APIConfig, error) {
 	}
 	if cfg.YTApiKey == "" {
 		return cfg, errors.New("api config error: invalid YouTube API key")
+	}
+	if cfg.LogDir == "" {
+		return cfg, fmt.Errorf("api config error: empty log dir")
 	}
 	return cfg, nil
 }
