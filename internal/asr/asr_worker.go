@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 
 	qarauv1 "github.com/mxwell/qarau/gen/qarau/v1"
+	"github.com/mxwell/qarau/internal/constants"
 	"github.com/mxwell/qarau/internal/worker"
 )
 
@@ -27,7 +28,6 @@ type ASRWorker struct {
 
 const (
 	maxAudioSize = 200_000_000
-	sampleRate   = 16_000
 )
 
 type claimedJob struct {
@@ -230,7 +230,7 @@ func (aw *ASRWorker) getFetchedAudio(ctx context.Context, job claimedJob) (audio
 }
 
 func (aw *ASRWorker) processAudio(ctx context.Context, job claimedJob, audio fetchedAudio) (transcription *qarauv1.Transcription, err error) {
-	reader, err := aw.transcoder.Transcode(ctx, audio.path, sampleRate)
+	reader, err := aw.transcoder.Transcode(ctx, audio.path, constants.PcmSampleRate)
 	if err != nil {
 		aw.logger.Error("transcoder failed", "job", job.jobID, "err", err)
 		return nil, err
@@ -246,7 +246,7 @@ func (aw *ASRWorker) processAudio(ctx context.Context, job claimedJob, audio fet
 		}
 	}()
 
-	return aw.transcriber.Transcribe(ctx, reader, audio.durationSecs, sampleRate)
+	return aw.transcriber.Transcribe(ctx, reader, audio.durationSecs, constants.PcmSampleRate)
 }
 
 func (aw *ASRWorker) sendTranscription(ctx context.Context, job claimedJob, transcription *qarauv1.Transcription) error {

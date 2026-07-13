@@ -6,6 +6,7 @@ type InputWord struct {
 	Word    string
 	StartMs int
 	EndMs   int
+	Speaker uint32
 }
 
 type Subtitle struct {
@@ -46,7 +47,7 @@ func Group(words []InputWord, maxPauseMs int, maxWords int) []Subtitle {
 	for end < len(words) {
 		prev := end - 1
 
-		if words[prev].EndMs+maxPauseMs < words[end].StartMs || end-start >= maxWords {
+		if words[prev].EndMs+maxPauseMs < words[end].StartMs || words[prev].Speaker != words[end].Speaker || end-start >= maxWords {
 			result = append(result, joinWords(words[start:end]))
 			start = end
 			end = start + 1

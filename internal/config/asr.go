@@ -20,6 +20,7 @@ type ASRConfig struct {
 	FfmpegTool   string
 	VoskModel    string
 	ElevenApiKey string
+	PcmFile      string // for testing purposes
 	LogDir       string
 	LogLevel     slog.Level
 }
@@ -60,6 +61,7 @@ func LoadASR() (ASRConfig, error) {
 		FfmpegTool:   v.GetString("FFMPEG"),
 		VoskModel:    v.GetString("VOSK_MODEL"),
 		ElevenApiKey: v.GetString("ELEVEN_API_KEY"),
+		PcmFile:      v.GetString("PCM_FILE"),
 		LogDir:       v.GetString("LOG_DIR"),
 		LogLevel:     logLevel,
 	}

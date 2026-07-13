@@ -88,7 +88,7 @@ func (q *Queries) GetTranscriptionsByVideoID(ctx context.Context, videoID int64)
 }
 
 const getWords = `-- name: GetWords :many
-SELECT transcription_id, seq, start_ms, end_ms, word, confidence FROM words
+SELECT transcription_id, seq, start_ms, end_ms, word, confidence, speaker FROM words
 WHERE
     transcription_id = $1 AND
     seq >= $2
@@ -118,6 +118,7 @@ func (q *Queries) GetWords(ctx context.Context, arg GetWordsParams) ([]Word, err
 			&i.EndMs,
 			&i.Word,
 			&i.Confidence,
+			&i.Speaker,
 		); err != nil {
 			return nil, err
 		}
@@ -136,6 +137,7 @@ type InsertWordsParams struct {
 	EndMs           int32  `json:"end_ms"`
 	Word            string `json:"word"`
 	Confidence      int16  `json:"confidence"`
+	Speaker         int32  `json:"speaker"`
 }
 
 const upsertTranscription = `-- name: UpsertTranscription :one

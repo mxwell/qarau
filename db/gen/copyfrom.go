@@ -35,6 +35,7 @@ func (r iteratorForInsertWords) Values() ([]interface{}, error) {
 		r.rows[0].EndMs,
 		r.rows[0].Word,
 		r.rows[0].Confidence,
+		r.rows[0].Speaker,
 	}, nil
 }
 
@@ -43,5 +44,5 @@ func (r iteratorForInsertWords) Err() error {
 }
 
 func (q *Queries) InsertWords(ctx context.Context, arg []InsertWordsParams) (int64, error) {
-	return q.db.CopyFrom(ctx, []string{"words"}, []string{"transcription_id", "seq", "start_ms", "end_ms", "word", "confidence"}, &iteratorForInsertWords{rows: arg})
+	return q.db.CopyFrom(ctx, []string{"words"}, []string{"transcription_id", "seq", "start_ms", "end_ms", "word", "confidence", "speaker"}, &iteratorForInsertWords{rows: arg})
 }

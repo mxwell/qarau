@@ -8,6 +8,7 @@ const (
 	MinViewsCount           = 1000
 	MaxViewsToLikesRatio    = 200          // refuse to process with less than 0.5% likes to views
 	AsrApiDailyQuotaSeconds = 10 * 60 * 60 // 10 hours per day
+	PcmSampleRate           = 16_000
 )
 
 var (

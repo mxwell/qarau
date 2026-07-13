@@ -13,6 +13,7 @@ import (
 	qarauv1 "github.com/mxwell/qarau/gen/qarau/v1"
 	"github.com/mxwell/qarau/internal/asr"
 	"github.com/mxwell/qarau/internal/config"
+	"github.com/mxwell/qarau/internal/constants"
 	"github.com/mxwell/qarau/internal/eleven"
 	"github.com/mxwell/qarau/internal/logging"
 	"google.golang.org/grpc"
@@ -27,7 +28,7 @@ func createTranscriber(logger *slog.Logger, cfg config.ASRConfig) (asr.Transcrib
 		}
 		return result, err
 	} else if cfg.ElevenApiKey != "" {
-		result, err := eleven.NewElevenTranscriber(logger, cfg.ElevenApiKey)
+		result, err := eleven.NewElevenTranscriber(logger, cfg.ElevenApiKey, false)
 		if err == nil {
 			logger.Info("created Eleven transcriber")
 		}
@@ -35,6 +36,29 @@ func createTranscriber(logger *slog.Logger, cfg config.ASRConfig) (asr.Transcrib
 	} else {
 		return nil, errors.New("no transcriber configured")
 	}
+}
+
+func runAsTestTool(ctx context.Context, logger *slog.Logger, cfg config.ASRConfig) error {
+	if cfg.ElevenApiKey == "" {
+		return fmt.Errorf("test tools needs Eleven API key")
+	}
+	transcriber, err := eleven.NewElevenTranscriber(logger, cfg.ElevenApiKey, true)
+	if err != nil {
+		return err
+	}
+	pcmReader, err := os.Open(cfg.PcmFile)
+	if err != nil {
+		return err
+	}
+	defer pcmReader.Close()
+
+	_, err = transcriber.Transcribe(ctx, pcmReader, 30, constants.PcmSampleRate)
+	if err != nil {
+		return fmt.Errorf("transcribe failed: %w", err)
+	}
+	logger.Info("transcribe success")
+
+	return nil
 }
 
 func run() error {
@@ -51,6 +75,12 @@ func run() error {
 		return fmt.Errorf("failed to init logger: %w", err)
 	}
 	defer logCloser.Close()
+
+	if cfg.PcmFile != "" {
+		logger.Info("running as test tool")
+		return runAsTestTool(ctx, logger, cfg)
+	}
+
 	logger.Info("ASR worker starting")
 
 	dialOptions := []grpc.DialOption{

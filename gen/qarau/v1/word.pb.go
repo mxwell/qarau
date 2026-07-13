@@ -27,6 +27,7 @@ type Word struct {
 	StartMs       uint32                 `protobuf:"varint,2,opt,name=start_ms,json=startMs,proto3" json:"start_ms,omitempty"`
 	EndMs         uint32                 `protobuf:"varint,3,opt,name=end_ms,json=endMs,proto3" json:"end_ms,omitempty"`
 	Confidence    uint32                 `protobuf:"varint,4,opt,name=confidence,proto3" json:"confidence,omitempty"`
+	Speaker       uint32                 `protobuf:"varint,5,opt,name=speaker,proto3" json:"speaker,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -89,18 +90,26 @@ func (x *Word) GetConfidence() uint32 {
 	return 0
 }
 
+func (x *Word) GetSpeaker() uint32 {
+	if x != nil {
+		return x.Speaker
+	}
+	return 0
+}
+
 var File_qarau_v1_word_proto protoreflect.FileDescriptor
 
 const file_qarau_v1_word_proto_rawDesc = "" +
 	"\n" +
-	"\x13qarau/v1/word.proto\x12\bqarau.v1\"l\n" +
+	"\x13qarau/v1/word.proto\x12\bqarau.v1\"\x86\x01\n" +
 	"\x04Word\x12\x12\n" +
 	"\x04word\x18\x01 \x01(\tR\x04word\x12\x19\n" +
 	"\bstart_ms\x18\x02 \x01(\rR\astartMs\x12\x15\n" +
 	"\x06end_ms\x18\x03 \x01(\rR\x05endMs\x12\x1e\n" +
 	"\n" +
 	"confidence\x18\x04 \x01(\rR\n" +
-	"confidenceB.Z,github.com/mxwell/qarau/gen/qarau/v1;qarauv1b\x06proto3"
+	"confidence\x12\x18\n" +
+	"\aspeaker\x18\x05 \x01(\rR\aspeakerB.Z,github.com/mxwell/qarau/gen/qarau/v1;qarauv1b\x06proto3"
 
 var (
 	file_qarau_v1_word_proto_rawDescOnce sync.Once

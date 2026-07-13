@@ -520,6 +520,7 @@ func (s *VideoService) GetSubtitles(ctx context.Context, transcriptionID int64, 
 			Word:    word,
 			StartMs: int(w.StartMs),
 			EndMs:   int(w.EndMs),
+			Speaker: uint32(w.Speaker),
 		})
 		maxSeq = max(maxSeq, w.Seq)
 	}

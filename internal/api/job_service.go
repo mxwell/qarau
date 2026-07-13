@@ -287,6 +287,7 @@ func (s *JobService) CompleteAsrJob(ctx context.Context, workerID string, jobID 
 				EndMs:           int32(word.EndMs),
 				Word:            word.Word,
 				Confidence:      int16(word.Confidence),
+				Speaker:         int32(word.Speaker),
 			})
 		}
 		insertCount, err := qtx.InsertWords(ctx, wordsParams)

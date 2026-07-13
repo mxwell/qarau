@@ -18,8 +18,9 @@ import (
 )
 
 type elevenTranscriber struct {
-	logger *slog.Logger
-	apiKey string
+	logger   *slog.Logger
+	apiKey   string
+	testMode bool
 }
 
 const (
@@ -28,10 +29,11 @@ const (
 	elevenSTTModelID = "scribe_v2"
 	fileFormat       = "pcm_s16le_16"
 	languageCode     = "kaz"
+	diarize          = "true"
 	granularity      = "word"
 )
 
-func NewElevenTranscriber(logger *slog.Logger, apiKey string) (asr.Transcriber, error) {
+func NewElevenTranscriber(logger *slog.Logger, apiKey string, testMode bool) (asr.Transcriber, error) {
 	if logger == nil {
 		return nil, errors.New("nil logger in elevenTranscriber creation")
 	}
@@ -39,17 +41,19 @@ func NewElevenTranscriber(logger *slog.Logger, apiKey string) (asr.Transcriber, 
 		return nil, errors.New("empty apiKey in elevenTranscriber creation")
 	}
 	return &elevenTranscriber{
-		logger: logger,
-		apiKey: apiKey,
+		logger:   logger,
+		apiKey:   apiKey,
+		testMode: testMode,
 	}, nil
 }
 
 type elevenWord struct {
-	Text     string  `json:"text"`
-	Start    float64 `json:"start"`
-	End      float64 `json:"end"`
-	WordType string  `json:"type"`
-	Logprob  float64 `json:"logprob"`
+	Text      string  `json:"text"`
+	Start     float64 `json:"start"`
+	End       float64 `json:"end"`
+	WordType  string  `json:"type"`
+	SpeakerId string  `json:"speaker_id,omitempty"`
+	Logprob   float64 `json:"logprob"`
 }
 
 type elevenResponse struct {
@@ -79,6 +83,9 @@ func (t *elevenTranscriber) requestSTT(ctx context.Context, pcm []byte) ([]byte,
 	var body bytes.Buffer
 	w := multipart.NewWriter(&body)
 	if err := w.WriteField("model_id", elevenSTTModelID); err != nil {
+		return nil, err
+	}
+	if err := w.WriteField("diarize", diarize); err != nil {
 		return nil, err
 	}
 	if err := w.WriteField("file_format", fileFormat); err != nil {
@@ -136,19 +143,31 @@ func (t *elevenTranscriber) parseEleven(data []byte) (*qarauv1.Transcription, er
 
 	packedWords := make([]*qarauv1.Word, 0)
 
+	speakers := map[string]uint32{}
+
 	for _, word := range response.Words {
 		if word.WordType != "word" {
 			continue
 		}
 		pct := 100 * math.Exp(word.Logprob)
+		speakerIdx, ok := speakers[word.SpeakerId]
+		if !ok {
+			speakerIdx = uint32(len(speakers))
+			speakers[word.SpeakerId] = speakerIdx
+		}
 		packedWords = append(packedWords, &qarauv1.Word{
 			Word:       word.Text,
 			StartMs:    uint32(word.Start * 1000),
 			EndMs:      uint32(word.End * 1000),
 			Confidence: uint32(clamp(pct, 0, 100)),
+			Speaker:    speakerIdx,
 		})
 	}
-	t.logger.Info("parsed API response", "before", len(response.Words), "after", len(packedWords))
+	t.logger.Info(
+		"parsed API response",
+		"before", len(response.Words),
+		"after", len(packedWords),
+		"speakers", len(speakers))
 
 	return &qarauv1.Transcription{
 		Model: elevenSTTModelID,
@@ -183,6 +202,10 @@ func (t *elevenTranscriber) Transcribe(
 	responseJson, err := t.requestSTT(ctx, pcm)
 	if err != nil {
 		return nil, err
+	}
+
+	if t.testMode {
+		fmt.Println(string(responseJson))
 	}
 
 	return t.parseEleven(responseJson)

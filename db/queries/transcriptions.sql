@@ -20,14 +20,16 @@ INSERT INTO words (
     start_ms,
     end_ms,
     word,
-    confidence
+    confidence,
+    speaker
 ) VALUES (
     $1,
     $2,
     $3,
     $4,
     $5,
-    $6
+    $6,
+    $7
 );
 
 -- name: GetTranscription :one

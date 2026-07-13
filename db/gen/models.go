@@ -158,4 +158,5 @@ type Word struct {
 	EndMs           int32  `json:"end_ms"`
 	Word            string `json:"word"`
 	Confidence      int16  `json:"confidence"`
+	Speaker         int32  `json:"speaker"`
 }
