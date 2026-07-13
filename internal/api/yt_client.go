@@ -74,7 +74,7 @@ func (c *YtClient) pickThumbnail(thumbnails *yt.ThumbnailDetails) (*yt.Thumbnail
 
 func (c *YtClient) GetVideoInformation(ctx context.Context, onlineVideoID string) (*Video, error) {
 	response, err := c.svc.Videos.
-		List([]string{"snippet", "contentDetails", "status"}).
+		List([]string{"snippet", "contentDetails", "statistics", "status"}).
 		Id(onlineVideoID).
 		Context(ctx).
 		Do()
@@ -118,6 +118,8 @@ func (c *YtClient) GetVideoInformation(ctx context.Context, onlineVideoID string
 			ChannelTitle:    v.Snippet.ChannelTitle,
 			PublishedAt:     publishedAt,
 			DurationSecs:    durationSecs,
+			Views:           int64(v.Statistics.ViewCount),
+			Likes:           int64(v.Statistics.LikeCount),
 			DefaultLang:     v.Snippet.DefaultLanguage,
 			Embeddable:      v.Status.Embeddable,
 			ThumbnailURL:    thumbnail.Url,

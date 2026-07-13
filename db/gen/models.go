@@ -141,6 +141,8 @@ type Video struct {
 	ChannelTitle    string             `json:"channel_title"`
 	PublishedAt     pgtype.Timestamptz `json:"published_at"`
 	Duration        pgtype.Interval    `json:"duration"`
+	Views           int64              `json:"views"`
+	Likes           int64              `json:"likes"`
 	DefaultLang     *string            `json:"default_lang"`
 	Embeddable      bool               `json:"embeddable"`
 	ThumbnailUrl    *string            `json:"thumbnail_url"`

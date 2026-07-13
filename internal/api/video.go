@@ -20,6 +20,8 @@ type Video struct {
 	ChannelTitle    string
 	PublishedAt     time.Time
 	DurationSecs    int32
+	Views           int64
+	Likes           int64
 	DefaultLang     string
 	Embeddable      bool
 	ThumbnailURL    string
@@ -42,6 +44,27 @@ func (v *Video) ProcessingObstacle() string {
 			constants.MaxDurationSecs,
 		)
 	}
+	if v.Likes < constants.MinLikesCount {
+		return fmt.Sprintf(
+			"the video has too few likes: %d < %d",
+			v.Likes,
+			constants.MinLikesCount,
+		)
+	}
+	if v.Views < constants.MinViewsCount {
+		return fmt.Sprintf(
+			"the video has too few views: %d < %d",
+			v.Views,
+			constants.MinViewsCount,
+		)
+	}
+	if v.Likes*constants.MaxViewsToLikesRatio < v.Views {
+		return fmt.Sprintf(
+			"%d - too few likes for a video with %d views",
+			v.Likes,
+			v.Views,
+		)
+	}
 	return ""
 }
 
@@ -50,6 +73,8 @@ type APIInfo struct {
 	Title           string `json:"title"`
 	ChannelTitle    string `json:"channel_title"`
 	DurationSecs    int32  `json:"duration_secs"`
+	Views           int64  `json:"views"`
+	Likes           int64  `json:"likes"`
 	DefaultLang     string `json:"default_lang"`
 	Embeddable      bool   `json:"embeddable"`
 	ThumbnailURL    string `json:"thumbnail_url"`
@@ -63,6 +88,8 @@ func NewAPIInfo(video *Video) APIInfo {
 		Title:           video.Title,
 		ChannelTitle:    video.ChannelTitle,
 		DurationSecs:    video.DurationSecs,
+		Views:           video.Views,
+		Likes:           video.Likes,
 		DefaultLang:     video.DefaultLang,
 		Embeddable:      video.Embeddable,
 		ThumbnailURL:    video.ThumbnailURL,

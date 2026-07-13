@@ -12,6 +12,10 @@ CREATE TABLE videos (
     published_at      TIMESTAMPTZ NOT NULL,          -- When video was published
     duration          INTERVAL    NOT NULL,           -- Video length (e.g., "4 mins 13 secs")
 
+    -- Stats
+    views             BIGINT NOT NULL,
+    likes             BIGINT NOT NULL,
+
     -- Additional metadata
     default_lang      TEXT,                          -- Audio language code (e.g., "en", "es")
     embeddable        BOOLEAN     NOT NULL,          -- Can be embedded on 3rd party sites

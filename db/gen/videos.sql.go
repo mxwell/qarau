@@ -19,6 +19,8 @@ INSERT INTO videos (
     channel_title,
     published_at,
     duration,
+    views,
+    likes,
     default_lang,
     embeddable,
     thumbnail_url,
@@ -35,7 +37,9 @@ INSERT INTO videos (
     $8,
     $9,
     $10,
-    $11
+    $11,
+    $12,
+    $13
 )
 RETURNING id
 `
@@ -47,6 +51,8 @@ type CreateVideoParams struct {
 	ChannelTitle    string             `json:"channel_title"`
 	PublishedAt     pgtype.Timestamptz `json:"published_at"`
 	Duration        pgtype.Interval    `json:"duration"`
+	Views           int64              `json:"views"`
+	Likes           int64              `json:"likes"`
 	DefaultLang     *string            `json:"default_lang"`
 	Embeddable      bool               `json:"embeddable"`
 	ThumbnailUrl    *string            `json:"thumbnail_url"`
@@ -62,6 +68,8 @@ func (q *Queries) CreateVideo(ctx context.Context, arg CreateVideoParams) (int64
 		arg.ChannelTitle,
 		arg.PublishedAt,
 		arg.Duration,
+		arg.Views,
+		arg.Likes,
 		arg.DefaultLang,
 		arg.Embeddable,
 		arg.ThumbnailUrl,
@@ -82,6 +90,8 @@ SELECT
     channel_title,
     published_at,
     duration,
+    views,
+    likes,
     default_lang,
     embeddable,
     thumbnail_url,
@@ -100,6 +110,8 @@ type GetVideoRow struct {
 	ChannelTitle    string             `json:"channel_title"`
 	PublishedAt     pgtype.Timestamptz `json:"published_at"`
 	Duration        pgtype.Interval    `json:"duration"`
+	Views           int64              `json:"views"`
+	Likes           int64              `json:"likes"`
 	DefaultLang     *string            `json:"default_lang"`
 	Embeddable      bool               `json:"embeddable"`
 	ThumbnailUrl    *string            `json:"thumbnail_url"`
@@ -118,6 +130,8 @@ func (q *Queries) GetVideo(ctx context.Context, onlineVideoID string) (GetVideoR
 		&i.ChannelTitle,
 		&i.PublishedAt,
 		&i.Duration,
+		&i.Views,
+		&i.Likes,
 		&i.DefaultLang,
 		&i.Embeddable,
 		&i.ThumbnailUrl,
@@ -136,6 +150,8 @@ SELECT
     channel_title,
     published_at,
     duration,
+    views,
+    likes,
     default_lang,
     embeddable,
     thumbnail_url,
@@ -154,6 +170,8 @@ type GetVideoByIDRow struct {
 	ChannelTitle    string             `json:"channel_title"`
 	PublishedAt     pgtype.Timestamptz `json:"published_at"`
 	Duration        pgtype.Interval    `json:"duration"`
+	Views           int64              `json:"views"`
+	Likes           int64              `json:"likes"`
 	DefaultLang     *string            `json:"default_lang"`
 	Embeddable      bool               `json:"embeddable"`
 	ThumbnailUrl    *string            `json:"thumbnail_url"`
@@ -172,6 +190,8 @@ func (q *Queries) GetVideoByID(ctx context.Context, videoID int64) (GetVideoByID
 		&i.ChannelTitle,
 		&i.PublishedAt,
 		&i.Duration,
+		&i.Views,
+		&i.Likes,
 		&i.DefaultLang,
 		&i.Embeddable,
 		&i.ThumbnailUrl,
