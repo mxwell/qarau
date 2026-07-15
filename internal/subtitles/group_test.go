@@ -67,12 +67,18 @@ func Test_Group(t *testing.T) {
 			maxWords:   5,
 			expected: []Subtitle{
 				{
-					Text:    "w1 w2",
+					Words: []OutputWord{
+						{"w1", 505, 805},
+						{"w2", 905, 1205},
+					},
 					StartMs: 505,
 					EndMs:   1205,
 				},
 				{
-					Text:    "w3 w4",
+					Words: []OutputWord{
+						{"w3", 1405, 1705},
+						{"w4", 1805, 2105},
+					},
 					StartMs: 1405,
 					EndMs:   2105,
 				},
@@ -85,12 +91,18 @@ func Test_Group(t *testing.T) {
 			3,
 			[]Subtitle{
 				{
-					Text:    "w1 w2 w3",
+					Words: []OutputWord{
+						{"w1", 505, 805},
+						{"w2", 905, 1205},
+						{"w3", 1405, 1705},
+					},
 					StartMs: 505,
 					EndMs:   1705,
 				},
 				{
-					Text:    "w4",
+					Words: []OutputWord{
+						{"w4", 1805, 2105},
+					},
 					StartMs: 1805,
 					EndMs:   2105,
 				},
@@ -110,17 +122,27 @@ func Test_Group(t *testing.T) {
 			3,
 			[]Subtitle{
 				{
-					Text:    "w1 w2",
+					Words: []OutputWord{
+						{"w1", 505, 805},
+						{"w2", 905, 1205},
+					},
 					StartMs: 505,
 					EndMs:   1205,
 				},
 				{
-					Text:    "w3 w4",
+					Words: []OutputWord{
+						{"w3", 1405, 1705},
+						{"w4", 1805, 2105},
+					},
 					StartMs: 1405,
 					EndMs:   2105,
 				},
 				{
-					Text:    "w5 w6 w7",
+					Words: []OutputWord{
+						{"w5", 2405, 2705},
+						{"w6", 2805, 3105},
+						{"w7", 3205, 3405},
+					},
 					StartMs: 2405,
 					EndMs:   3405,
 				},
@@ -149,12 +171,17 @@ func Test_Group(t *testing.T) {
 			100,
 			[]Subtitle{
 				{
-					Text:    "w1",
+					Words: []OutputWord{
+						{"w1", 0, 100},
+					},
 					StartMs: 0,
 					EndMs:   100,
 				},
 				{
-					Text:    "w2 w3",
+					Words: []OutputWord{
+						{"w2", 201, 300},
+						{"w3", 400, 500},
+					},
 					StartMs: 201,
 					EndMs:   500,
 				},
@@ -167,17 +194,27 @@ func Test_Group(t *testing.T) {
 			3,
 			[]Subtitle{
 				{
-					Text:    "w1 w2 w3",
+					Words: []OutputWord{
+						{"w1", 505, 805},
+						{"w2", 905, 1205},
+						{"w3", 1405, 1705},
+					},
 					StartMs: 505,
 					EndMs:   1705,
 				},
 				{
-					Text:    "w4 w5 w6",
+					Words: []OutputWord{
+						{"w4", 1805, 2105},
+						{"w5", 2405, 2705},
+						{"w6", 2805, 3105},
+					},
 					StartMs: 1805,
 					EndMs:   3105,
 				},
 				{
-					Text:    "w7",
+					Words: []OutputWord{
+						{"w7", 3205, 3405},
+					},
 					StartMs: 3205,
 					EndMs:   3405,
 				},
@@ -195,7 +232,7 @@ func Test_Group(t *testing.T) {
 			1000,
 			100,
 			[]Subtitle{
-				{"w1", 0, 100},
+				{[]OutputWord{{"w1", 0, 100}}, 0, 100},
 			},
 		},
 		{
@@ -205,7 +242,15 @@ func Test_Group(t *testing.T) {
 			100,
 			[]Subtitle{
 				{
-					Text:    "w1 w2 w3 w4 w5 w6 w7",
+					Words: []OutputWord{
+						{"w1", 505, 805},
+						{"w2", 905, 1205},
+						{"w3", 1405, 1705},
+						{"w4", 1805, 2105},
+						{"w5", 2405, 2705},
+						{"w6", 2805, 3105},
+						{"w7", 3205, 3405},
+					},
 					StartMs: 505,
 					EndMs:   3405,
 				},
@@ -217,13 +262,13 @@ func Test_Group(t *testing.T) {
 			10000,
 			1,
 			[]Subtitle{
-				{"w1", 505, 805},
-				{"w2", 905, 1205},
-				{"w3", 1405, 1705},
-				{"w4", 1805, 2105},
-				{"w5", 2405, 2705},
-				{"w6", 2805, 3105},
-				{"w7", 3205, 3405},
+				{[]OutputWord{{"w1", 505, 805}}, 505, 805},
+				{[]OutputWord{{"w2", 905, 1205}}, 905, 1205},
+				{[]OutputWord{{"w3", 1405, 1705}}, 1405, 1705},
+				{[]OutputWord{{"w4", 1805, 2105}}, 1805, 2105},
+				{[]OutputWord{{"w5", 2405, 2705}}, 2405, 2705},
+				{[]OutputWord{{"w6", 2805, 3105}}, 2805, 3105},
+				{[]OutputWord{{"w7", 3205, 3405}}, 3205, 3405},
 			},
 		},
 		{
@@ -237,8 +282,22 @@ func Test_Group(t *testing.T) {
 			100,
 			10,
 			[]Subtitle{
-				{"w1 w2 w3", 0, 500},
-				{"w4", 601, 700},
+				{
+					Words: []OutputWord{
+						{"w1", 0, 101},
+						{"w2", 100, 301},
+						{"w3", 300, 500},
+					},
+					StartMs: 0,
+					EndMs:   500,
+				},
+				{
+					Words: []OutputWord{
+						{"w4", 601, 700},
+					},
+					StartMs: 601,
+					EndMs:   700,
+				},
 			},
 		},
 		{
@@ -252,9 +311,28 @@ func Test_Group(t *testing.T) {
 			100,
 			10,
 			[]Subtitle{
-				{"w1 w2", 0, 200},
-				{"w3", 201, 300},
-				{"w4", 301, 400},
+				{
+					Words: []OutputWord{
+						{"w1", 0, 100},
+						{"w2", 101, 200},
+					},
+					StartMs: 0,
+					EndMs:   200,
+				},
+				{
+					Words: []OutputWord{
+						{"w3", 201, 300},
+					},
+					StartMs: 201,
+					EndMs:   300,
+				},
+				{
+					Words: []OutputWord{
+						{"w4", 301, 400},
+					},
+					StartMs: 301,
+					EndMs:   400,
+				},
 			},
 		},
 	}

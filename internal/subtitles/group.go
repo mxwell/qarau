@@ -9,10 +9,24 @@ type InputWord struct {
 	Speaker uint32
 }
 
-type Subtitle struct {
-	Text    string `json:"text"`
+type OutputWord struct {
+	Word    string `json:"word"`
 	StartMs int    `json:"start_ms"`
 	EndMs   int    `json:"end_ms"`
+}
+
+type Subtitle struct {
+	Words   []OutputWord `json:"words"`
+	StartMs int          `json:"start_ms"`
+	EndMs   int          `json:"end_ms"`
+}
+
+func (s *Subtitle) JoinText() string {
+	words := make([]string, 0, len(s.Words))
+	for i := range s.Words {
+		words = append(words, s.Words[i].Word)
+	}
+	return strings.Join(words, " ")
 }
 
 func joinWords(words []InputWord) Subtitle {
@@ -20,12 +34,16 @@ func joinWords(words []InputWord) Subtitle {
 	if n == 0 {
 		return Subtitle{}
 	}
-	wordTexts := make([]string, 0, n)
+	outputWords := make([]OutputWord, 0, n)
 	for i := range words {
-		wordTexts = append(wordTexts, words[i].Word)
+		outputWords = append(outputWords, OutputWord{
+			Word:    words[i].Word,
+			StartMs: words[i].StartMs,
+			EndMs:   words[i].EndMs,
+		})
 	}
 	return Subtitle{
-		Text:    strings.Join(wordTexts, " "),
+		Words:   outputWords,
 		StartMs: words[0].StartMs,
 		EndMs:   words[len(words)-1].EndMs,
 	}
