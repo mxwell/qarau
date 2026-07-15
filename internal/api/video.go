@@ -58,13 +58,6 @@ func (v *Video) ProcessingObstacle() string {
 			constants.MinViewsCount,
 		)
 	}
-	if v.Likes*constants.MaxViewsToLikesRatio < v.Views {
-		return fmt.Sprintf(
-			"%d - too few likes for a video with %d views",
-			v.Likes,
-			v.Views,
-		)
-	}
 	return ""
 }
 
