@@ -1,5 +1,6 @@
 # build output
 /bin/
+/logs
 *.exe
 
 # local env / secrets (config comes from the environment)
