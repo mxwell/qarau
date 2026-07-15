@@ -33,6 +33,7 @@ func NewVideoHandler(log *slog.Logger, svc *VideoService) (*VideoHandler, error)
 }
 
 func (h *VideoHandler) Register(r fiber.Router) {
+	r.Get("/suggested_videos", h.SuggestedVideos)
 	r.Get("/probe/:online_video_id", h.Probe)
 	r.Post("/fetch/:video_id", h.Fetch)
 	r.Get("/subtitles/:transcription_id", h.Subtitles)
@@ -203,6 +204,15 @@ func (h *VideoHandler) Dash(c *fiber.Ctx) error {
 	response, err := h.svc.GetDash(c.UserContext())
 	if err != nil {
 		h.log.Error("failed to get data for /dash", "err", err)
+		return internalError(c, "internal error")
+	}
+	return c.JSON(response)
+}
+
+func (h *VideoHandler) SuggestedVideos(c *fiber.Ctx) error {
+	response, err := h.svc.GetSuggestedVideos(c.UserContext())
+	if err != nil {
+		h.log.Error("failed to load suggested videos", "err", err)
 		return internalError(c, "internal error")
 	}
 	return c.JSON(response)

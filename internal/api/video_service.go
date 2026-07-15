@@ -230,6 +230,20 @@ type DashResponse struct {
 	AsrQuota    QuotaStatus `json:"asr_quota"`
 }
 
+type SuggestedVideo struct {
+	OnlineVideoID   string `json:"online_video_id"`
+	Title           string `json:"title"`
+	ChannelTitle    string `json:"channel_title"`
+	DurationSecs    int32  `json:"duration_secs"`
+	ThumbnailURL    string `json:"thumbnail_url"`
+	ThumbnailWidth  int32  `json:"thumbnail_width"`
+	ThumbnailHeight int32  `json:"thumbnail_height"`
+}
+
+type SuggestedVideos struct {
+	Videos []SuggestedVideo `json:"videos"`
+}
+
 /**
  * Just take an item with the largest job ID
  */
@@ -583,5 +597,29 @@ func (s *VideoService) GetDash(ctx context.Context) (DashResponse, error) {
 	return DashResponse{
 		Last24hJobs: dashJobs,
 		AsrQuota:    asrQuota,
+	}, nil
+}
+
+func (s *VideoService) GetSuggestedVideos(ctx context.Context) (SuggestedVideos, error) {
+	rows, err := s.queries.GetSuggestedVideos(ctx)
+	if err != nil {
+		return SuggestedVideos{}, fmt.Errorf("failed to load suggested videos: %w", err)
+	}
+
+	videos := make([]SuggestedVideo, 0, len(rows))
+	for _, row := range rows {
+		videos = append(videos, SuggestedVideo{
+			OnlineVideoID:   row.OnlineVideoID,
+			Title:           row.Title,
+			ChannelTitle:    row.ChannelTitle,
+			DurationSecs:    int32(row.Duration.Microseconds / microsecondsPerSecond),
+			ThumbnailURL:    *row.ThumbnailUrl,
+			ThumbnailWidth:  *row.ThumbnailWidth,
+			ThumbnailHeight: *row.ThumbnailHeight,
+		})
+	}
+
+	return SuggestedVideos{
+		Videos: videos,
 	}, nil
 }

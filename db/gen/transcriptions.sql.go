@@ -7,6 +7,8 @@ package dbgen
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const deleteWordsByTranscriptionId = `-- name: DeleteWordsByTranscriptionId :exec
@@ -37,6 +39,80 @@ func (q *Queries) FindSeqByStartMs(ctx context.Context, arg FindSeqByStartMsPara
 	var seq int32
 	err := row.Scan(&seq)
 	return seq, err
+}
+
+const getSuggestedVideos = `-- name: GetSuggestedVideos :many
+  SELECT
+      v.id,
+      v.online_video_id,
+      v.title,
+      v.channel_id,
+      v.channel_title,
+      v.published_at,
+      v.duration,
+      v.views,
+      v.likes,
+      v.default_lang,
+      v.embeddable,
+      v.thumbnail_url,
+      v.thumbnail_width,
+      v.thumbnail_height
+  FROM transcriptions t
+  JOIN videos v ON v.id = t.video_id
+  ORDER BY random()
+  LIMIT 10
+`
+
+type GetSuggestedVideosRow struct {
+	ID              int64              `json:"id"`
+	OnlineVideoID   string             `json:"online_video_id"`
+	Title           string             `json:"title"`
+	ChannelID       string             `json:"channel_id"`
+	ChannelTitle    string             `json:"channel_title"`
+	PublishedAt     pgtype.Timestamptz `json:"published_at"`
+	Duration        pgtype.Interval    `json:"duration"`
+	Views           int64              `json:"views"`
+	Likes           int64              `json:"likes"`
+	DefaultLang     *string            `json:"default_lang"`
+	Embeddable      bool               `json:"embeddable"`
+	ThumbnailUrl    *string            `json:"thumbnail_url"`
+	ThumbnailWidth  *int32             `json:"thumbnail_width"`
+	ThumbnailHeight *int32             `json:"thumbnail_height"`
+}
+
+func (q *Queries) GetSuggestedVideos(ctx context.Context) ([]GetSuggestedVideosRow, error) {
+	rows, err := q.db.Query(ctx, getSuggestedVideos)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetSuggestedVideosRow
+	for rows.Next() {
+		var i GetSuggestedVideosRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OnlineVideoID,
+			&i.Title,
+			&i.ChannelID,
+			&i.ChannelTitle,
+			&i.PublishedAt,
+			&i.Duration,
+			&i.Views,
+			&i.Likes,
+			&i.DefaultLang,
+			&i.Embeddable,
+			&i.ThumbnailUrl,
+			&i.ThumbnailWidth,
+			&i.ThumbnailHeight,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getTranscription = `-- name: GetTranscription :one

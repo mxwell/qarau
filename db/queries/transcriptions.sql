@@ -56,3 +56,24 @@ WHERE
     start_ms >= sqlc.arg('start_ms')
 ORDER BY seq
 LIMIT 1;
+
+-- name: GetSuggestedVideos :many
+  SELECT
+      v.id,
+      v.online_video_id,
+      v.title,
+      v.channel_id,
+      v.channel_title,
+      v.published_at,
+      v.duration,
+      v.views,
+      v.likes,
+      v.default_lang,
+      v.embeddable,
+      v.thumbnail_url,
+      v.thumbnail_width,
+      v.thumbnail_height
+  FROM transcriptions t
+  JOIN videos v ON v.id = t.video_id
+  ORDER BY random()
+  LIMIT 10;
