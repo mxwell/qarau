@@ -133,3 +133,17 @@ WHERE
     jt.state IN ('pending', 'running') AND
     jt.created_at < sqlc.arg('created_before')
 ORDER BY jt.created_at ASC;
+
+-- name: GetLast24hJobs :many
+SELECT
+    jt.type,
+    jt.state,
+    vt.online_video_id,
+    vt.title,
+    vt.duration,
+    jt.created_at
+FROM jobs AS jt
+JOIN videos AS vt ON jt.video_id = vt.id
+WHERE
+    jt.created_at > now() - INTERVAL '24 hours'
+ORDER BY jt.created_at DESC;

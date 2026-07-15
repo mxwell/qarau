@@ -216,6 +216,20 @@ type VideoProcess struct {
 	AsrQuota     QuotaStatus     `json:"asr_quota"`
 }
 
+type DashJob struct {
+	JobType           dbgen.JobType  `json:"job_type"`
+	JobState          dbgen.JobState `json:"job_state"`
+	OnlineVideoID     string         `json:"online_video_id"`
+	Title             string         `json:"title"`
+	VideoDurationSecs int32          `json:"video_duration_secs"`
+	CreatedAt         int64          `json:"created_at"`
+}
+
+type DashResponse struct {
+	Last24hJobs []DashJob   `json:"last_24h_jobs"`
+	AsrQuota    QuotaStatus `json:"asr_quota"`
+}
+
 /**
  * Just take an item with the largest job ID
  */
@@ -541,5 +555,33 @@ func (s *VideoService) GetSubtitles(ctx context.Context, transcriptionID int64, 
 	return SubtitleSpan{
 		Items: subtitleItems,
 		Next:  nextSeq,
+	}, nil
+}
+
+func (s *VideoService) GetDash(ctx context.Context) (DashResponse, error) {
+	jobs, err := s.queries.GetLast24hJobs(ctx)
+	if err != nil {
+		return DashResponse{}, fmt.Errorf("failed to load last 24h jobs for /dash: %w", err)
+	}
+	dashJobs := make([]DashJob, 0, len(jobs))
+	for _, job := range jobs {
+		dashJobs = append(dashJobs, DashJob{
+			JobType:           job.Type,
+			JobState:          job.State,
+			OnlineVideoID:     job.OnlineVideoID,
+			Title:             job.Title,
+			VideoDurationSecs: int32(job.Duration.Microseconds / microsecondsPerSecond),
+			CreatedAt:         job.CreatedAt.Time.Unix(),
+		})
+	}
+
+	asrQuota, err := s.loadQuota(ctx)
+	if err != nil {
+		return DashResponse{}, fmt.Errorf("failed to load quota status for /dash: %w", err)
+	}
+
+	return DashResponse{
+		Last24hJobs: dashJobs,
+		AsrQuota:    asrQuota,
 	}, nil
 }

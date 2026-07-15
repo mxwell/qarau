@@ -24,6 +24,7 @@ type Querier interface {
 	GetAudioBlob(ctx context.Context, videoID int64) (GetAudioBlobRow, error)
 	GetFetchJobQueue(ctx context.Context, createdBefore pgtype.Timestamptz) ([]GetFetchJobQueueRow, error)
 	GetJob(ctx context.Context, jobID int64) (GetJobRow, error)
+	GetLast24hJobs(ctx context.Context) ([]GetLast24hJobsRow, error)
 	GetTranscription(ctx context.Context, id int64) (Transcription, error)
 	GetTranscriptionsByVideoID(ctx context.Context, videoID int64) ([]Transcription, error)
 	GetVideo(ctx context.Context, onlineVideoID string) (GetVideoRow, error)
