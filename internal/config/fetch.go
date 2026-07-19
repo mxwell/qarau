@@ -12,13 +12,22 @@ import (
 )
 
 type FetchConfig struct {
-	WorkerId   string
-	APIHost    string
-	APIPort    uint16
-	Tool       string
-	WorkingDir string
-	LogDir     string
-	LogLevel   slog.Level
+	WorkerId      string
+	APIHost       string
+	APIPort       uint16
+	Tool          string
+	JsRuntimeName string
+	JsRuntimePath string
+	WorkingDir    string
+	LogDir        string
+	LogLevel      slog.Level
+}
+
+func (c *FetchConfig) GetJsRuntime() string {
+	if c.JsRuntimeName == "" {
+		return ""
+	}
+	return c.JsRuntimeName + ":" + c.JsRuntimePath
 }
 
 func LoadFetch() (FetchConfig, error) {
@@ -42,14 +51,29 @@ func LoadFetch() (FetchConfig, error) {
 		return FetchConfig{}, fmt.Errorf("fetch config error: %w", err)
 	}
 
+	jsRuntimeName := v.GetString("JS_RUNTIME_NAME")
+	jsRuntimePath := ""
+	if jsRuntimeName != "" {
+		jsRuntimePath = v.GetString("JS_RUNTIME_PATH")
+		if _, err := os.Stat(jsRuntimePath); err != nil {
+			return FetchConfig{}, fmt.Errorf("fetch config error: JS_RUNTIME_NAME is set, but JS_RUNTIME_PATH is invalid: %w", err)
+		}
+	} else {
+		if jsRuntimePath := v.GetString("JS_RUNTIME_PATH"); jsRuntimePath != "" {
+			return FetchConfig{}, fmt.Errorf("fetch config error: JS_RUNTIME_PATH is set, but JS_RUNTIME_NAME is empty")
+		}
+	}
+
 	cfg := FetchConfig{
-		WorkerId:   v.GetString("WORKER_ID"),
-		APIHost:    v.GetString("API_HOST"),
-		APIPort:    v.GetUint16("API_PORT"),
-		Tool:       v.GetString("TOOL"),
-		WorkingDir: v.GetString("WORKING_DIR"),
-		LogDir:     v.GetString("LOG_DIR"),
-		LogLevel:   logLevel,
+		WorkerId:      v.GetString("WORKER_ID"),
+		APIHost:       v.GetString("API_HOST"),
+		APIPort:       v.GetUint16("API_PORT"),
+		Tool:          v.GetString("TOOL"),
+		JsRuntimeName: jsRuntimeName,
+		JsRuntimePath: jsRuntimePath,
+		WorkingDir:    v.GetString("WORKING_DIR"),
+		LogDir:        v.GetString("LOG_DIR"),
+		LogLevel:      logLevel,
 	}
 
 	if !strings.HasPrefix(cfg.WorkerId, "fetch_") {

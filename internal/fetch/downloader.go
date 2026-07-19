@@ -19,6 +19,7 @@ type Downloader interface {
 type YtDlpDownloader struct {
 	logger     *slog.Logger
 	tool       string
+	jsRuntime  string
 	workingDir string
 }
 
@@ -41,33 +42,51 @@ func (d *YtDlpDownloader) Download(ctx context.Context, jobID int64, onlineVideo
 		}
 	}
 	outputPattern := filepath.Join(jobDir, "%(id)s.%(ext)s")
-	args := []string{
-		"-f", "bestaudio/best",
-		"--no-playlist",
-		"--no-cache-dir",
-		"--no-mtime",
-		"--no-warnings",
-		"--retries", "3",
-		"-o", outputPattern,
-		"--print", "after_move:%(filepath)s",
-		url,
-	}
+	var result string
 
-	cmd := exec.CommandContext(ctx, d.tool, args...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	d.logger.Info("running yt-dlp", "job", jobID, "tool", d.tool, "args", args)
-	if err = cmd.Run(); err != nil {
-		// check for context cancellation
-		if ctx.Err() != nil {
-			return "", cleanup, ctx.Err()
+	for approach := range 2 {
+		args := make([]string, 0)
+		args = append(
+			args,
+			"-f", "bestaudio/best",
+			"--no-playlist",
+			"--no-cache-dir",
+			"--no-mtime",
+			"--no-warnings",
+			"--retries", "3",
+			"-o", outputPattern,
+			"--print", "after_move:%(filepath)s",
+		)
+		if approach > 0 {
+			if d.jsRuntime == "" {
+				break
+			}
+			args = append(args,
+				"--js-runtimes", d.jsRuntime,
+				"--remote-components", "ejs:github",
+			)
 		}
-		d.logger.Error("yt-dlp run failed", "err", err, "stderr", stderr.String())
+		args = append(args, url)
+		cmd := exec.CommandContext(ctx, d.tool, args...)
+		var stdout, stderr bytes.Buffer
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+
+		d.logger.Info("running yt-dlp", "job", jobID, "approach", approach, "tool", d.tool, "args", args)
+		if err = cmd.Run(); err != nil {
+			// check for context cancellation
+			if ctx.Err() != nil {
+				return "", cleanup, ctx.Err()
+			}
+			d.logger.Warn("yt-dlp run failed", "err", err, "stderr", stderr.String())
+			continue
+		}
+		result = strings.TrimSpace(stdout.String())
+		break
+	}
+	if err != nil {
 		return "", cleanup, fmt.Errorf("yt-dlp failed: %w", err)
 	}
-	result := strings.TrimSpace(stdout.String())
 	if result == "" {
 		return "", cleanup, errors.New("yt-dlp produced no output path")
 	}
@@ -75,7 +94,7 @@ func (d *YtDlpDownloader) Download(ctx context.Context, jobID int64, onlineVideo
 	return result, cleanup, nil
 }
 
-func NewYtDlpDownloader(logger *slog.Logger, tool string, workingDir string) (*YtDlpDownloader, error) {
+func NewYtDlpDownloader(logger *slog.Logger, tool string, jsRuntime string, workingDir string) (*YtDlpDownloader, error) {
 	if logger == nil {
 		return nil, errors.New("nil logger in YtDlpDownloader creation")
 	}
@@ -88,6 +107,7 @@ func NewYtDlpDownloader(logger *slog.Logger, tool string, workingDir string) (*Y
 	return &YtDlpDownloader{
 		logger:     logger,
 		tool:       tool,
+		jsRuntime:  jsRuntime,
 		workingDir: workingDir,
 	}, nil
 }

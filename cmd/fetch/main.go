@@ -59,7 +59,7 @@ func run() error {
 
 	client := qarauv1.NewJobServiceClient(conn)
 
-	downloader, err := fetch.NewYtDlpDownloader(logger, cfg.Tool, cfg.WorkingDir)
+	downloader, err := fetch.NewYtDlpDownloader(logger, cfg.Tool, cfg.GetJsRuntime(), cfg.WorkingDir)
 	if err != nil {
 		return err
 	}
