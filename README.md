@@ -63,3 +63,10 @@ scp -r db/migrations qarau.khairulin.com:/qarau-bundle/db-setup/migrations
 
 export DB_URL=postgres://qarau:***secret***@localhost:5432/qaraudb?sslmode=disable
 ./goose -dir migrations postgres $DB_URL up
+```
+
+## Fetch
+
+Fetch worker has an alternative approach using JS runtime, see https://github.com/yt-dlp/yt-dlp/wiki/EJS
+
+One needs to set `JS_RUNTIME_NAME` and `JS_RUNTIME_PATH` to enable it.
