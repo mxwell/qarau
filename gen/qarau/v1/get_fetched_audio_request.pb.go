@@ -23,9 +23,8 @@ const (
 
 type GetFetchedAudioRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	WorkerId      string                 `protobuf:"bytes,1,opt,name=worker_id,json=workerId,proto3" json:"worker_id,omitempty"` // worker instance id, e.g. "asr-pod-abc"
-	JobId         int64                  `protobuf:"varint,2,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`         // to confirm a lease
-	VideoId       int64                  `protobuf:"varint,3,opt,name=video_id,json=videoId,proto3" json:"video_id,omitempty"`   // audio blobs are keyed by video_id
+	JobId         int64                  `protobuf:"varint,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`       // to confirm a lease
+	VideoId       int64                  `protobuf:"varint,2,opt,name=video_id,json=videoId,proto3" json:"video_id,omitempty"` // audio blobs are keyed by video_id
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -60,13 +59,6 @@ func (*GetFetchedAudioRequest) Descriptor() ([]byte, []int) {
 	return file_qarau_v1_get_fetched_audio_request_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *GetFetchedAudioRequest) GetWorkerId() string {
-	if x != nil {
-		return x.WorkerId
-	}
-	return ""
-}
-
 func (x *GetFetchedAudioRequest) GetJobId() int64 {
 	if x != nil {
 		return x.JobId
@@ -85,11 +77,10 @@ var File_qarau_v1_get_fetched_audio_request_proto protoreflect.FileDescriptor
 
 const file_qarau_v1_get_fetched_audio_request_proto_rawDesc = "" +
 	"\n" +
-	"(qarau/v1/get_fetched_audio_request.proto\x12\bqarau.v1\"g\n" +
-	"\x16GetFetchedAudioRequest\x12\x1b\n" +
-	"\tworker_id\x18\x01 \x01(\tR\bworkerId\x12\x15\n" +
-	"\x06job_id\x18\x02 \x01(\x03R\x05jobId\x12\x19\n" +
-	"\bvideo_id\x18\x03 \x01(\x03R\avideoIdB.Z,github.com/mxwell/qarau/gen/qarau/v1;qarauv1b\x06proto3"
+	"(qarau/v1/get_fetched_audio_request.proto\x12\bqarau.v1\"J\n" +
+	"\x16GetFetchedAudioRequest\x12\x15\n" +
+	"\x06job_id\x18\x01 \x01(\x03R\x05jobId\x12\x19\n" +
+	"\bvideo_id\x18\x02 \x01(\x03R\avideoIdB.Z,github.com/mxwell/qarau/gen/qarau/v1;qarauv1b\x06proto3"
 
 var (
 	file_qarau_v1_get_fetched_audio_request_proto_rawDescOnce sync.Once

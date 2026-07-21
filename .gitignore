@@ -9,6 +9,9 @@
 .asr.env
 .fetch.env
 
+# mTLS
+/certs/
+
 # go
 *.test
 *.out

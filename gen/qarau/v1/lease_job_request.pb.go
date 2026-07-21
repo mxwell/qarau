@@ -24,7 +24,6 @@ const (
 type LeaseJobRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Type          JobType                `protobuf:"varint,1,opt,name=type,proto3,enum=qarau.v1.JobType" json:"type,omitempty"`
-	WorkerId      string                 `protobuf:"bytes,2,opt,name=worker_id,json=workerId,proto3" json:"worker_id,omitempty"` // worker instance id, e.g. "asr-pod-abc"
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -66,21 +65,13 @@ func (x *LeaseJobRequest) GetType() JobType {
 	return JobType_JOB_TYPE_UNSPECIFIED
 }
 
-func (x *LeaseJobRequest) GetWorkerId() string {
-	if x != nil {
-		return x.WorkerId
-	}
-	return ""
-}
-
 var File_qarau_v1_lease_job_request_proto protoreflect.FileDescriptor
 
 const file_qarau_v1_lease_job_request_proto_rawDesc = "" +
 	"\n" +
-	" qarau/v1/lease_job_request.proto\x12\bqarau.v1\x1a\x17qarau/v1/job_type.proto\"U\n" +
+	" qarau/v1/lease_job_request.proto\x12\bqarau.v1\x1a\x17qarau/v1/job_type.proto\"8\n" +
 	"\x0fLeaseJobRequest\x12%\n" +
-	"\x04type\x18\x01 \x01(\x0e2\x11.qarau.v1.JobTypeR\x04type\x12\x1b\n" +
-	"\tworker_id\x18\x02 \x01(\tR\bworkerIdB.Z,github.com/mxwell/qarau/gen/qarau/v1;qarauv1b\x06proto3"
+	"\x04type\x18\x01 \x01(\x0e2\x11.qarau.v1.JobTypeR\x04typeB.Z,github.com/mxwell/qarau/gen/qarau/v1;qarauv1b\x06proto3"
 
 var (
 	file_qarau_v1_lease_job_request_proto_rawDescOnce sync.Once

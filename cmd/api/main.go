@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -19,6 +22,7 @@ import (
 	"github.com/mxwell/qarau/internal/logging"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 )
 
 func run() error {
@@ -58,8 +62,27 @@ func run() error {
 	}
 
 	// gRPC
-	var opts []grpc.ServerOption
-	grpcServer := grpc.NewServer(opts...)
+	certificate, err := tls.LoadX509KeyPair(cfg.MTlsCert, cfg.MTlsKey)
+	if err != nil {
+		return fmt.Errorf("failed to load cert/key pair: %w", err)
+	}
+
+	caCertData, err := os.ReadFile(cfg.MTlsCaCert)
+	if err != nil {
+		return fmt.Errorf("failed to load CA cert: %w", err)
+	}
+
+	caPool := x509.NewCertPool()
+	if !caPool.AppendCertsFromPEM(caCertData) {
+		return errors.New("failed to append the CA certificate to CA pool")
+	}
+
+	tlsConfig := &tls.Config{
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		Certificates: []tls.Certificate{certificate},
+		ClientCAs:    caPool,
+	}
+	grpcServer := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsConfig)))
 
 	queries := dbgen.New(db)
 	jobService, err := api.NewService(logger, queries, db)

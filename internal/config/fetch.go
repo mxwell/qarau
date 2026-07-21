@@ -6,15 +6,16 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/spf13/viper"
 )
 
 type FetchConfig struct {
-	WorkerId      string
 	APIHost       string
 	APIPort       uint16
+	MTlsCaCert    string
+	MTlsCert      string
+	MTlsKey       string
 	Tool          string
 	JsRuntimeName string
 	JsRuntimePath string
@@ -39,6 +40,9 @@ func LoadFetch() (FetchConfig, error) {
 
 	v.SetDefault("API_HOST", "localhost")
 	v.SetDefault("API_PORT", 7991)
+	v.SetDefault("MTLS_CA_CERT", "certs/ca.crt")
+	v.SetDefault("MTLS_CERT", "certs/fetch.crt")
+	v.SetDefault("MTLS_KEY", "certs/fetch.key")
 	v.SetDefault("LOG_DIR", "logs")
 	v.SetDefault("LOG_LEVEL", "INFO")
 
@@ -65,9 +69,11 @@ func LoadFetch() (FetchConfig, error) {
 	}
 
 	cfg := FetchConfig{
-		WorkerId:      v.GetString("WORKER_ID"),
 		APIHost:       v.GetString("API_HOST"),
 		APIPort:       v.GetUint16("API_PORT"),
+		MTlsCaCert:    v.GetString("MTLS_CA_CERT"),
+		MTlsCert:      v.GetString("MTLS_CERT"),
+		MTlsKey:       v.GetString("MTLS_KEY"),
 		Tool:          v.GetString("TOOL"),
 		JsRuntimeName: jsRuntimeName,
 		JsRuntimePath: jsRuntimePath,
@@ -76,15 +82,14 @@ func LoadFetch() (FetchConfig, error) {
 		LogLevel:      logLevel,
 	}
 
-	if !strings.HasPrefix(cfg.WorkerId, "fetch_") {
-		return FetchConfig{}, fmt.Errorf("fetch config error: worker ID should start with fetch_ - '%v'", cfg.WorkerId)
-	}
-
 	if len(cfg.APIHost) == 0 {
 		return FetchConfig{}, errors.New("fetch config error: empty API host")
 	}
 	if cfg.APIPort <= 0 {
 		return FetchConfig{}, fmt.Errorf("fetch config error: invalid API port %d", cfg.APIPort)
+	}
+	if cfg.MTlsCaCert == "" || cfg.MTlsCert == "" || cfg.MTlsKey == "" {
+		return FetchConfig{}, fmt.Errorf("fetch config error: some cert paths are missing: '%s', '%s', '%s'", cfg.MTlsCaCert, cfg.MTlsCert, cfg.MTlsKey)
 	}
 	if len(cfg.Tool) == 0 {
 		return FetchConfig{}, errors.New("fetch config error: empty tool")

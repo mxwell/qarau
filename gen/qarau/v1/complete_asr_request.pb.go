@@ -26,7 +26,6 @@ type CompleteAsrRequest struct {
 	JobId         int64                  `protobuf:"varint,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
 	VideoId       int64                  `protobuf:"varint,2,opt,name=video_id,json=videoId,proto3" json:"video_id,omitempty"`
 	Transcription *Transcription         `protobuf:"bytes,3,opt,name=transcription,proto3" json:"transcription,omitempty"`
-	WorkerId      string                 `protobuf:"bytes,4,opt,name=worker_id,json=workerId,proto3" json:"worker_id,omitempty"` // TODO should be signed and passed through auth header
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -82,23 +81,15 @@ func (x *CompleteAsrRequest) GetTranscription() *Transcription {
 	return nil
 }
 
-func (x *CompleteAsrRequest) GetWorkerId() string {
-	if x != nil {
-		return x.WorkerId
-	}
-	return ""
-}
-
 var File_qarau_v1_complete_asr_request_proto protoreflect.FileDescriptor
 
 const file_qarau_v1_complete_asr_request_proto_rawDesc = "" +
 	"\n" +
-	"#qarau/v1/complete_asr_request.proto\x12\bqarau.v1\x1a\x1cqarau/v1/transcription.proto\"\xa2\x01\n" +
+	"#qarau/v1/complete_asr_request.proto\x12\bqarau.v1\x1a\x1cqarau/v1/transcription.proto\"\x85\x01\n" +
 	"\x12CompleteAsrRequest\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\x03R\x05jobId\x12\x19\n" +
 	"\bvideo_id\x18\x02 \x01(\x03R\avideoId\x12=\n" +
-	"\rtranscription\x18\x03 \x01(\v2\x17.qarau.v1.TranscriptionR\rtranscription\x12\x1b\n" +
-	"\tworker_id\x18\x04 \x01(\tR\bworkerIdB.Z,github.com/mxwell/qarau/gen/qarau/v1;qarauv1b\x06proto3"
+	"\rtranscription\x18\x03 \x01(\v2\x17.qarau.v1.TranscriptionR\rtranscriptionB.Z,github.com/mxwell/qarau/gen/qarau/v1;qarauv1b\x06proto3"
 
 var (
 	file_qarau_v1_complete_asr_request_proto_rawDescOnce sync.Once

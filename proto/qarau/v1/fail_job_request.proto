@@ -6,6 +6,5 @@ option go_package = "github.com/mxwell/qarau/gen/qarau/v1;qarauv1";
 
 message FailJobRequest {
   int64 job_id = 1;
-  string worker_id = 2;
-  string error_message = 3;
+  string error_message = 2;
 }

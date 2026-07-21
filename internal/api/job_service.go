@@ -87,11 +87,7 @@ func (s *JobService) checkQuotaOk(ctx context.Context) (bool, error) {
 	return ok, nil
 }
 
-func (s *JobService) LeaseJob(ctx context.Context, request *qarauv1.LeaseJobRequest) (*qarauv1.LeaseJobResponse, error) {
-	if len(request.WorkerId) == 0 {
-		return nil, errors.New("empty worker ID")
-	}
-
+func (s *JobService) LeaseJob(ctx context.Context, workerID string, request *qarauv1.LeaseJobRequest) (*qarauv1.LeaseJobResponse, error) {
 	jobType, err := convertJobType(request.Type)
 	if err != nil {
 		return nil, err
@@ -117,7 +113,7 @@ func (s *JobService) LeaseJob(ctx context.Context, request *qarauv1.LeaseJobRequ
 		Valid: true,
 	}
 	arg := dbgen.ClaimJobParams{
-		LockedBy:    &request.WorkerId,
+		LockedBy:    &workerID,
 		LockedUntil: lockedUntil,
 		JobType:     jobType,
 	}

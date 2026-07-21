@@ -6,11 +6,14 @@ import (
 	"hash/crc32"
 	"io"
 	"log/slog"
+	"net/url"
 	"strings"
 
 	qarauv1 "github.com/mxwell/qarau/gen/qarau/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
 
@@ -39,8 +42,58 @@ func NewServer(log *slog.Logger, service *JobService) *JobServer {
 
 var _ qarauv1.JobServiceServer = (*JobServer)(nil)
 
+func (s *JobServer) getWorkerURI(ctx context.Context) *url.URL {
+	p, ok := peer.FromContext(ctx)
+	if !ok {
+		s.logger.Warn("failed to get peer info from context")
+		return nil
+	}
+	mtls, ok := p.AuthInfo.(credentials.TLSInfo)
+	if !ok {
+		s.logger.Warn("failed to cast to TLSInfo")
+		return nil
+	}
+	if len(mtls.State.PeerCertificates) == 0 {
+		s.logger.Warn("no peer certs")
+		return nil
+	}
+	cert := mtls.State.PeerCertificates[0]
+	if len(cert.URIs) == 0 {
+		s.logger.Warn("no URIs in cert")
+		return nil
+	}
+	uri := cert.URIs[0]
+	if uri.Scheme != "spiffe" {
+		s.logger.Warn("unexpected URI scheme", "scheme", uri.Scheme)
+		return nil
+	}
+	if uri.Host != "qarau" {
+		s.logger.Warn("unexpected URI host", "host", uri.Host)
+		return nil
+	}
+	return uri
+}
+
+func (s *JobServer) getWorkerID(ctx context.Context) (string, error) {
+	uri := s.getWorkerURI(ctx)
+	if uri == nil {
+		s.logger.Warn("failed to extract worker URI from TLS info")
+		return "", status.Errorf(codes.Unauthenticated, "invalid workerID")
+	}
+	workerID := uri.Path
+	if workerID == "" {
+		s.logger.Warn("empty path in worker URI")
+		return "", status.Errorf(codes.Unauthenticated, "invalid workerID")
+	}
+	return workerID, nil
+}
+
 func (s *JobServer) LeaseJob(ctx context.Context, request *qarauv1.LeaseJobRequest) (*qarauv1.LeaseJobResponse, error) {
-	return s.service.LeaseJob(ctx, request)
+	workerID, err := s.getWorkerID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.service.LeaseJob(ctx, workerID, request)
 }
 
 func (s *JobServer) validateFilename(jobID int64, filename string) error {
@@ -57,9 +110,13 @@ func (s *JobServer) validateFilename(jobID int64, filename string) error {
 }
 
 func (s *JobServer) CompleteFetch(stream grpc.ClientStreamingServer[qarauv1.CompleteFetchRequest, qarauv1.CompleteFetchResponse]) error {
+	workerID, err := s.getWorkerID(stream.Context())
+	if err != nil {
+		return err
+	}
+
 	accumulator := bytes.Buffer{}
 
-	var workerID string
 	var jobID int64
 	var videoID int64
 	var filename string
@@ -111,7 +168,6 @@ func (s *JobServer) CompleteFetch(stream grpc.ClientStreamingServer[qarauv1.Comp
 			}
 
 			declaredLen = m.Meta.Length
-			workerID = m.Meta.WorkerId
 			jobID = m.Meta.JobId
 			videoID = m.Meta.VideoId
 			filename = m.Meta.Filename
@@ -123,9 +179,6 @@ func (s *JobServer) CompleteFetch(stream grpc.ClientStreamingServer[qarauv1.Comp
 			if declaredLen > maxAudioSize {
 				s.logger.Error("too big audio in CompleteFetch stream", "declaredLen", declaredLen, "job", jobID, "worker", workerID)
 				return status.Errorf(codes.FailedPrecondition, "too big audio not allowed")
-			}
-			if workerID == "" {
-				return status.Errorf(codes.FailedPrecondition, "empty workerID")
 			}
 			if jobID <= 0 {
 				return status.Errorf(codes.FailedPrecondition, "empty jobID")
@@ -161,8 +214,13 @@ func (s *JobServer) CompleteFetch(stream grpc.ClientStreamingServer[qarauv1.Comp
 }
 
 func (s *JobServer) GetFetchedAudio(request *qarauv1.GetFetchedAudioRequest, stream grpc.ServerStreamingServer[qarauv1.GetFetchedAudioResponse]) error {
+	workerID, err := s.getWorkerID(stream.Context())
+	if err != nil {
+		return err
+	}
+
 	jobID := request.JobId
-	leaseValid := s.service.CheckLease(stream.Context(), jobID, request.WorkerId)
+	leaseValid := s.service.CheckLease(stream.Context(), jobID, workerID)
 	if !leaseValid {
 		return status.Errorf(codes.NotFound, "lease not found")
 	}
@@ -229,8 +287,12 @@ func (s *JobServer) GetFetchedAudio(request *qarauv1.GetFetchedAudioRequest, str
 }
 
 func (s *JobServer) CompleteAsr(ctx context.Context, request *qarauv1.CompleteAsrRequest) (*qarauv1.GenericResponse, error) {
+	workerID, err := s.getWorkerID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	jobID := request.JobId
-	workerID := request.WorkerId
 	transcription := request.Transcription
 
 	if jobID <= 0 {
@@ -239,13 +301,6 @@ func (s *JobServer) CompleteAsr(ctx context.Context, request *qarauv1.CompleteAs
 			Ok:           false,
 			ErrorMessage: "invalid jobID",
 		}, status.Errorf(codes.InvalidArgument, "invalid jobID")
-	}
-	if workerID == "" {
-		s.logger.Error("empty workerID", "workerID", workerID)
-		return &qarauv1.GenericResponse{
-			Ok:           false,
-			ErrorMessage: "empty workerID",
-		}, status.Errorf(codes.InvalidArgument, "empty workerID")
 	}
 
 	s.logger.Info("received CompleteAsr request", "job", jobID, "worker", workerID)
@@ -258,7 +313,7 @@ func (s *JobServer) CompleteAsr(ctx context.Context, request *qarauv1.CompleteAs
 		}, status.Errorf(codes.InvalidArgument, "nil transcription")
 	}
 
-	err := s.service.CompleteAsrJob(ctx, workerID, jobID, request.VideoId, transcription)
+	err = s.service.CompleteAsrJob(ctx, workerID, jobID, request.VideoId, transcription)
 	if err != nil {
 		s.logger.Error("failed to complete ASR job", "job", jobID, "err", err)
 		return &qarauv1.GenericResponse{
@@ -273,8 +328,12 @@ func (s *JobServer) CompleteAsr(ctx context.Context, request *qarauv1.CompleteAs
 }
 
 func (s *JobServer) FailJob(ctx context.Context, request *qarauv1.FailJobRequest) (*qarauv1.FailJobResponse, error) {
-	s.logger.Info("received FailJob request", "job", request.JobId, "worker", request.WorkerId, "errorMessage", request.ErrorMessage)
-	if err := s.service.FailJob(ctx, request.JobId, request.WorkerId, request.ErrorMessage); err != nil {
+	workerID, err := s.getWorkerID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	s.logger.Info("received FailJob request", "job", request.JobId, "worker", workerID, "errorMessage", request.ErrorMessage)
+	if err := s.service.FailJob(ctx, request.JobId, workerID, request.ErrorMessage); err != nil {
 		return &qarauv1.FailJobResponse{}, status.Error(codes.Internal, "failed to mark the job failed")
 	}
 	return &qarauv1.FailJobResponse{}, nil

@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -15,7 +17,6 @@ import (
 	"github.com/mxwell/qarau/internal/logging"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 func run() error {
@@ -34,22 +35,31 @@ func run() error {
 	defer logCloser.Close()
 	logger.Info("fetch starting")
 
-	var dialOptions []grpc.DialOption
-	if cfg.APIPort == 443 {
-		creds := credentials.NewTLS(&tls.Config{
-			ServerName: cfg.APIHost,
-		})
-		dialOptions = []grpc.DialOption{
-			grpc.WithTransportCredentials(creds),
-		}
-	} else {
-		dialOptions = []grpc.DialOption{
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		}
+	certificate, err := tls.LoadX509KeyPair(cfg.MTlsCert, cfg.MTlsKey)
+	if err != nil {
+		return fmt.Errorf("failed to load cert/key pair: %w", err)
+	}
+
+	caCertData, err := os.ReadFile(cfg.MTlsCaCert)
+	if err != nil {
+		return fmt.Errorf("failed to load CA cert: %w", err)
+	}
+
+	caPool := x509.NewCertPool()
+	if !caPool.AppendCertsFromPEM(caCertData) {
+		return errors.New("failed to append the CA certificate to CA pool")
+	}
+
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{certificate},
+		RootCAs:      caPool,
 	}
 
 	target := net.JoinHostPort(cfg.APIHost, fmt.Sprint(cfg.APIPort))
-	conn, err := grpc.NewClient(target, dialOptions...)
+	conn, err := grpc.NewClient(
+		target,
+		grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)),
+	)
 	if err != nil {
 		logger.Error("failed to create gRPC connection", "err", err)
 		return err
@@ -67,7 +77,6 @@ func run() error {
 	worker, err := fetch.NewFetchWorker(
 		client,
 		logger,
-		cfg.WorkerId,
 		downloader,
 	)
 	if err != nil {

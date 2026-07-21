@@ -12,9 +12,11 @@ import (
 )
 
 type ASRConfig struct {
-	WorkerID     string
 	APIHost      string
 	APIPort      uint16
+	MTlsCaCert   string
+	MTlsCert     string
+	MTlsKey      string
 	WorkingDir   string
 	RemoveFiles  bool
 	FfmpegTool   string
@@ -39,6 +41,9 @@ func LoadASR() (ASRConfig, error) {
 
 	v.SetDefault("API_HOST", "localhost")
 	v.SetDefault("API_PORT", 7991)
+	v.SetDefault("MTLS_CA_CERT", "certs/ca.crt")
+	v.SetDefault("MTLS_CERT", "certs/asr.crt")
+	v.SetDefault("MTLS_KEY", "certs/asr.key")
 	v.SetDefault("REMOVE_FILES", 1)
 	v.SetDefault("LOG_DIR", "logs")
 	v.SetDefault("LOG_LEVEL", "INFO")
@@ -53,9 +58,11 @@ func LoadASR() (ASRConfig, error) {
 	}
 
 	cfg := ASRConfig{
-		WorkerID:     v.GetString("WORKER_ID"),
 		APIHost:      v.GetString("API_HOST"),
 		APIPort:      v.GetUint16("API_PORT"),
+		MTlsCaCert:   v.GetString("MTLS_CA_CERT"),
+		MTlsCert:     v.GetString("MTLS_CERT"),
+		MTlsKey:      v.GetString("MTLS_KEY"),
 		WorkingDir:   v.GetString("WORKING_DIR"),
 		RemoveFiles:  v.GetUint8("REMOVE_FILES") > 0,
 		FfmpegTool:   v.GetString("FFMPEG"),
@@ -66,15 +73,14 @@ func LoadASR() (ASRConfig, error) {
 		LogLevel:     logLevel,
 	}
 
-	if !strings.HasPrefix(cfg.WorkerID, "asr_") {
-		return ASRConfig{}, fmt.Errorf("ASR config error: worker ID should start with asr_ - '%v'", cfg.WorkerID)
-	}
-
 	if len(cfg.APIHost) == 0 {
 		return ASRConfig{}, errors.New("ASR config error: empty API host")
 	}
 	if cfg.APIPort < 1024 {
 		return ASRConfig{}, fmt.Errorf("ASR config error: invalid API port %d", cfg.APIPort)
+	}
+	if cfg.MTlsCaCert == "" || cfg.MTlsCert == "" || cfg.MTlsKey == "" {
+		return ASRConfig{}, fmt.Errorf("ASR config error: some cert paths are missing: '%s', '%s', '%s'", cfg.MTlsCaCert, cfg.MTlsCert, cfg.MTlsKey)
 	}
 	if !filepath.IsAbs(cfg.WorkingDir) {
 		return ASRConfig{}, fmt.Errorf("ASR config error: invalid working dir '%v'", cfg.WorkingDir)

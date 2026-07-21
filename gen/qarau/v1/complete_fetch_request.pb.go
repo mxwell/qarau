@@ -109,7 +109,6 @@ type CompleteFetchMeta struct {
 	VideoId       int64                  `protobuf:"varint,2,opt,name=video_id,json=videoId,proto3" json:"video_id,omitempty"`
 	Filename      string                 `protobuf:"bytes,3,opt,name=filename,proto3" json:"filename,omitempty"`
 	Length        int64                  `protobuf:"varint,4,opt,name=length,proto3" json:"length,omitempty"`
-	WorkerId      string                 `protobuf:"bytes,5,opt,name=worker_id,json=workerId,proto3" json:"worker_id,omitempty"` // TODO should be signed and passed through auth header
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -170,13 +169,6 @@ func (x *CompleteFetchMeta) GetLength() int64 {
 		return x.Length
 	}
 	return 0
-}
-
-func (x *CompleteFetchMeta) GetWorkerId() string {
-	if x != nil {
-		return x.WorkerId
-	}
-	return ""
 }
 
 type CompleteFetchChunk struct {
@@ -247,13 +239,12 @@ const file_qarau_v1_complete_fetch_request_proto_rawDesc = "" +
 	"\x14CompleteFetchRequest\x121\n" +
 	"\x04meta\x18\x01 \x01(\v2\x1b.qarau.v1.CompleteFetchMetaH\x00R\x04meta\x124\n" +
 	"\x05chunk\x18\x02 \x01(\v2\x1c.qarau.v1.CompleteFetchChunkH\x00R\x05chunkB\x05\n" +
-	"\x03msg\"\x96\x01\n" +
+	"\x03msg\"y\n" +
 	"\x11CompleteFetchMeta\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\x03R\x05jobId\x12\x19\n" +
 	"\bvideo_id\x18\x02 \x01(\x03R\avideoId\x12\x1a\n" +
 	"\bfilename\x18\x03 \x01(\tR\bfilename\x12\x16\n" +
-	"\x06length\x18\x04 \x01(\x03R\x06length\x12\x1b\n" +
-	"\tworker_id\x18\x05 \x01(\tR\bworkerId\"\\\n" +
+	"\x06length\x18\x04 \x01(\x03R\x06length\"\\\n" +
 	"\x12CompleteFetchChunk\x12\x16\n" +
 	"\x06offset\x18\x01 \x01(\x03R\x06offset\x12\x18\n" +
 	"\acontent\x18\x02 \x01(\fR\acontent\x12\x14\n" +

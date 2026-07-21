@@ -17,7 +17,6 @@ import (
 type FetchWorker struct {
 	client       qarauv1.JobServiceClient
 	logger       *slog.Logger
-	workerID     string
 	leaseRequest qarauv1.LeaseJobRequest
 	downloader   Downloader
 }
@@ -32,26 +31,21 @@ func (j claimedJob) GetID() int64 {
 	return j.jobID
 }
 
-func NewFetchWorker(client qarauv1.JobServiceClient, logger *slog.Logger, workerID string, downloader Downloader) (*FetchWorker, error) {
+func NewFetchWorker(client qarauv1.JobServiceClient, logger *slog.Logger, downloader Downloader) (*FetchWorker, error) {
 	if client == nil {
 		return nil, errors.New("nil client in FetchWorker creation")
 	}
 	if logger == nil {
 		return nil, errors.New("nil logger in FetchWorker creation")
 	}
-	if len(workerID) == 0 {
-		return nil, errors.New("empty worker ID in FetchWorker creation")
-	}
 	if downloader == nil {
 		return nil, errors.New("nil downloader in FetchWorker creation")
 	}
 	return &FetchWorker{
-		client:   client,
-		logger:   logger,
-		workerID: workerID,
+		client: client,
+		logger: logger,
 		leaseRequest: qarauv1.LeaseJobRequest{
-			Type:     qarauv1.JobType_JOB_TYPE_FETCH,
-			WorkerId: workerID,
+			Type: qarauv1.JobType_JOB_TYPE_FETCH,
 		},
 		downloader: downloader,
 	}, nil
@@ -136,7 +130,6 @@ func (fw *FetchWorker) streamAudio(ctx context.Context, job claimedJob, audioPat
 				VideoId:  job.videoID,
 				Filename: filename,
 				Length:   length,
-				WorkerId: fw.workerID,
 			},
 		},
 	})
@@ -207,7 +200,6 @@ func (fw *FetchWorker) streamAudio(ctx context.Context, job claimedJob, audioPat
 func (fw *FetchWorker) failFetch(ctx context.Context, job claimedJob, errorMessage string) error {
 	_, err := fw.client.FailJob(ctx, &qarauv1.FailJobRequest{
 		JobId:        job.jobID,
-		WorkerId:     fw.workerID,
 		ErrorMessage: errorMessage,
 	})
 	if err != nil {

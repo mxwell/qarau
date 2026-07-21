@@ -16,7 +16,6 @@ message CompleteFetchMeta {
     int64 video_id = 2;
     string filename = 3;
     int64 length = 4;
-    string worker_id = 5;  // TODO should be signed and passed through auth header
 }
 
 message CompleteFetchChunk {

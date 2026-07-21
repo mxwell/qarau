@@ -18,7 +18,6 @@ import (
 type ASRWorker struct {
 	client       qarauv1.JobServiceClient
 	logger       *slog.Logger
-	workerID     string
 	workingDir   string
 	removeFiles  bool
 	leaseRequest qarauv1.LeaseJobRequest
@@ -42,7 +41,6 @@ func (j claimedJob) GetID() int64 {
 func NewASRWorker(
 	client qarauv1.JobServiceClient,
 	logger *slog.Logger,
-	workerID string,
 	workingDir string,
 	removeFiles bool,
 	transcoder Transcoder,
@@ -54,9 +52,6 @@ func NewASRWorker(
 	if logger == nil {
 		return nil, errors.New("nil logger in ASRWorker creation")
 	}
-	if len(workerID) == 0 {
-		return nil, errors.New("empty worker ID in ASRWorker creation")
-	}
 	if err := os.MkdirAll(workingDir, 0o755); err != nil {
 		logger.Error("failed to create directory for audio files", "dir", workingDir, "err", err)
 		return nil, fmt.Errorf("working dir error: %w", err)
@@ -64,12 +59,10 @@ func NewASRWorker(
 	return &ASRWorker{
 		client:      client,
 		logger:      logger,
-		workerID:    workerID,
 		workingDir:  workingDir,
 		removeFiles: removeFiles,
 		leaseRequest: qarauv1.LeaseJobRequest{
-			Type:     qarauv1.JobType_JOB_TYPE_ASR,
-			WorkerId: workerID,
+			Type: qarauv1.JobType_JOB_TYPE_ASR,
 		},
 		transcoder:  transcoder,
 		transcriber: transcriber,
@@ -110,9 +103,8 @@ func cleanupNoOp() {}
 
 func (aw *ASRWorker) getFetchedAudio(ctx context.Context, job claimedJob) (audio fetchedAudio, cleanup func(), err error) {
 	request := qarauv1.GetFetchedAudioRequest{
-		WorkerId: aw.workerID,
-		JobId:    job.jobID,
-		VideoId:  job.videoID,
+		JobId:   job.jobID,
+		VideoId: job.videoID,
 	}
 	stream, err := aw.client.GetFetchedAudio(ctx, &request)
 	if err != nil {
@@ -254,7 +246,6 @@ func (aw *ASRWorker) sendTranscription(ctx context.Context, job claimedJob, tran
 		JobId:         job.jobID,
 		VideoId:       job.videoID,
 		Transcription: transcription,
-		WorkerId:      aw.workerID,
 	}
 
 	response, err := aw.client.CompleteAsr(ctx, request)
@@ -270,7 +261,6 @@ func (aw *ASRWorker) sendTranscription(ctx context.Context, job claimedJob, tran
 func (aw *ASRWorker) failAsr(ctx context.Context, job claimedJob, errorMessage string) error {
 	_, err := aw.client.FailJob(ctx, &qarauv1.FailJobRequest{
 		JobId:        job.jobID,
-		WorkerId:     aw.workerID,
 		ErrorMessage: errorMessage,
 	})
 	if err != nil {

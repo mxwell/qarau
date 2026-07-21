@@ -13,6 +13,9 @@ import (
 
 type APIConfig struct {
 	GRPCPort    uint16
+	MTlsCaCert  string
+	MTlsCert    string
+	MTlsKey     string
 	RESTPort    uint16
 	GracePeriod time.Duration
 	DBUrl       string
@@ -30,6 +33,9 @@ func LoadAPI() (APIConfig, error) {
 
 	// Defaults
 	v.SetDefault("GRPC_PORT", 7991)
+	v.SetDefault("MTLS_CA_CERT", "certs/ca.crt")
+	v.SetDefault("MTLS_CERT", "certs/api.crt")
+	v.SetDefault("MTLS_KEY", "certs/api.key")
 	v.SetDefault("REST_PORT", 7992)
 	v.SetDefault("GRACE_PERIOD", "3s")
 	v.SetDefault("LOG_DIR", "logs")
@@ -46,6 +52,9 @@ func LoadAPI() (APIConfig, error) {
 
 	cfg := APIConfig{
 		GRPCPort:    v.GetUint16("GRPC_PORT"),
+		MTlsCaCert:  v.GetString("MTLS_CA_CERT"),
+		MTlsCert:    v.GetString("MTLS_CERT"),
+		MTlsKey:     v.GetString("MTLS_KEY"),
 		RESTPort:    v.GetUint16("REST_PORT"),
 		GracePeriod: v.GetDuration("GRACE_PERIOD"),
 		DBUrl:       v.GetString("DB_URL"),
@@ -56,6 +65,9 @@ func LoadAPI() (APIConfig, error) {
 
 	if cfg.GRPCPort < 1024 {
 		return cfg, fmt.Errorf("api config error: invalid GRPC port %d", cfg.GRPCPort)
+	}
+	if cfg.MTlsCaCert == "" || cfg.MTlsCert == "" || cfg.MTlsKey == "" {
+		return cfg, fmt.Errorf("api config error: some cert paths are missing: '%s', '%s', '%s'", cfg.MTlsCaCert, cfg.MTlsCert, cfg.MTlsKey)
 	}
 	if cfg.RESTPort < 1024 {
 		return cfg, fmt.Errorf("api config error: invalid REST port %d", cfg.RESTPort)
