@@ -4,6 +4,10 @@ Online video transcription pipeline. Three Go components - `api` (gRPC + HTTP, s
 `fetch` and `asr` (stateless workers that poll `api` over gRPC) - coordinated through a
 Postgres job queue.
 
+## Architecture
+
+![qarau architecture](docs/qarau_mtls.png)
+
 ## Quick start (local)
 
 ```sh
