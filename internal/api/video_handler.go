@@ -2,16 +2,19 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"math"
 	"regexp"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/mxwell/qarau/internal/subtitles"
 )
 
 var (
 	onlineVideoIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
+	errInvalidParam      = errors.New("invalid param")
 )
 
 type VideoHandler struct {
@@ -37,6 +40,7 @@ func (h *VideoHandler) Register(r fiber.Router) {
 	r.Get("/probe/:online_video_id", h.Probe)
 	r.Post("/fetch/:video_id", h.Fetch)
 	r.Get("/subtitles/:transcription_id", h.Subtitles)
+	r.Get("/export/:transcription_id", h.Export)
 
 	r.Get("/dash", h.Dash)
 }
@@ -119,15 +123,23 @@ func (h *VideoHandler) Fetch(c *fiber.Ctx) error {
 	return c.JSON(videoProcess)
 }
 
-func (h *VideoHandler) Subtitles(c *fiber.Ctx) error {
+func (h *VideoHandler) getTranscriptionIDParam(c *fiber.Ctx) (int64, error) {
 	transcriptionIDString := c.Params("transcription_id")
 	transcriptionID, err := strconv.ParseInt(transcriptionIDString, 10, 64)
 	if err != nil {
 		h.log.Info("failed to parse transcriptionID", "param", transcriptionIDString, "err", err)
-		return badRequest(c, "invalid transcription_id")
+		return 0, err
 	}
 	if transcriptionID < 0 {
 		h.log.Info("negative transcriptionID", "transcriptionID", transcriptionID)
+		return 0, errInvalidParam
+	}
+	return transcriptionID, nil
+}
+
+func (h *VideoHandler) Subtitles(c *fiber.Ctx) error {
+	transcriptionID, err := h.getTranscriptionIDParam(c)
+	if err != nil {
 		return badRequest(c, "invalid transcription_id")
 	}
 
@@ -198,6 +210,41 @@ func (h *VideoHandler) Subtitles(c *fiber.Ctx) error {
 		return internalError(c, "internal error")
 	}
 	return c.JSON(subtitleSpan)
+}
+
+func (h *VideoHandler) Export(c *fiber.Ctx) error {
+	transcriptionID, err := h.getTranscriptionIDParam(c)
+	if err != nil {
+		return badRequest(c, "invalid transcription_id")
+	}
+
+	subtitleSpan, err := h.svc.GetSubtitles(
+		c.UserContext(),
+		transcriptionID,
+		/* seq */ 0,
+		/* wordCount */ math.MaxInt32, /* effectively unbounded */
+		/* minConfidence */ 0,
+	)
+	if err != nil {
+		if errors.Is(err, ErrNoSuchTranscription) {
+			h.log.Info("no such transcription", "transcriptionID", transcriptionID, "err", err)
+			return notFound(c, "transcription not found")
+		}
+		h.log.Error("failed to get subtitles", "transcriptionID", transcriptionID, "err", err)
+		return internalError(c, "internal error")
+	}
+
+	result := subtitles.ConvertFrom(subtitleSpan.Items)
+	h.log.Info(
+		"rendered SRT response",
+		"transcriptionID", transcriptionID,
+		"size", len(result),
+		"subtitles", len(subtitleSpan.Items),
+	)
+
+	c.Set(fiber.HeaderContentType, "application/x-subrip; charset=utf-8")
+	c.Attachment(fmt.Sprintf("transcription_%d.srt", transcriptionID))
+	return c.SendString(result)
 }
 
 func (h *VideoHandler) Dash(c *fiber.Ctx) error {
