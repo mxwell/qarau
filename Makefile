@@ -9,6 +9,9 @@ GOBIN     := $(shell go env GOBIN)
 GOPATH    := $(shell go env GOPATH)
 export PATH := $(if $(GOBIN),$(GOBIN),$(GOPATH)/bin):$(PATH)
 
+export CGO_CFLAGS="-I${PWD}/onnxruntime/include"
+export CGO_LDFLAGS="-L${PWD}/onnxruntime/lib"
+
 .PHONY: tools proto sqlc migrate-up migrate-down build run-api run-fetch run-asr test lint tidy
 
 ## tools: install codegen tooling (protoc plugins, sqlc, goose)
@@ -60,7 +63,7 @@ run-asr:
 	go run ./cmd/asr
 
 test:
-	go test ./...
+	LD_LIBRARY_PATH=${PWD}/onnxruntime/lib go test ./...
 
 lint:
 	go vet ./...

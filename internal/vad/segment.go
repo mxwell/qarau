@@ -1,0 +1,231 @@
+package vad
+
+import (
+	"errors"
+	"slices"
+
+	"github.com/streamer45/silero-vad-go/speech"
+)
+
+const (
+	bytesPer16bitFrame = 2
+
+	sampleRateKhz = 16
+	sampleRateHz  = sampleRateKhz * 1000
+)
+
+var (
+	ErrAudioNotMultipleOf16Bits        = errors.New("audio length is not a multiple of 16 bits")
+	ErrSegmentStartTimestampOutOfRange = errors.New("segment start timestamp out of range")
+	ErrSegmentEndTimestampOutOfRange   = errors.New("segment end timestamp out of range")
+)
+
+/* Values are frame indices */
+type SegmentRange struct {
+	RealStart int // with padding
+	RealEnd   int // with padding
+	CopyStart int
+}
+
+type Fragment struct {
+	Content       []byte
+	Ranges        []SegmentRange
+	RealSpeechEnd int // unit is frame indices, position is before padding
+}
+
+func (f *Fragment) reset() {
+	f.Content = f.Content[:0]
+	f.Ranges = f.Ranges[:0]
+}
+
+func (f *Fragment) LengthInFrames() int {
+	return len(f.Content) / bytesPer16bitFrame
+}
+
+func (f *Fragment) getRealEnd() int {
+	n := len(f.Ranges)
+	if n == 0 {
+		return 0
+	}
+	return f.RealSpeechEnd
+}
+
+func (f *Fragment) appendSegment(content []byte, realStart, realSpeechEnd, realEnd int) {
+	posInFrames := f.LengthInFrames()
+	f.Content = append(f.Content, content...)
+	f.Ranges = append(f.Ranges, SegmentRange{
+		RealStart: realStart,
+		RealEnd:   realEnd,
+		CopyStart: posInFrames,
+	})
+	f.RealSpeechEnd = realSpeechEnd
+}
+
+func (f *Fragment) copy() Fragment {
+	return Fragment{
+		Content: slices.Clone(f.Content),
+		Ranges:  slices.Clone(f.Ranges),
+	}
+}
+
+type SegmentationParams struct {
+	FragmentMaxFrames int // we stop adding content to a fragment once it reaches this number of frames
+	GapMaxFrames      int // we finalize a current fragment if we meet a gap longer than this number of frames
+}
+
+type collector struct {
+	params    SegmentationParams
+	fragments []Fragment
+	current   Fragment
+}
+
+func newCollector(params SegmentationParams) *collector {
+	return &collector{
+		params: params,
+	}
+}
+
+func (c *collector) finalize() {
+	c.fragments = append(c.fragments, c.current.copy())
+
+	c.current.reset()
+}
+
+func (c *collector) finalizeIfMaxFrames() {
+	if c.current.LengthInFrames() >= c.params.FragmentMaxFrames {
+		//log.Printf("finalize after max frames: %d", c.current.LengthInFrames())
+		c.finalize()
+	}
+}
+
+func (c *collector) finalizeIfGap(nextSpeechStartInFrames int) {
+	gap := nextSpeechStartInFrames - c.current.getRealEnd()
+	if gap >= c.params.GapMaxFrames {
+		//log.Printf("finalize before gap: %d", gap)
+		c.finalize()
+	}
+}
+
+func (c *collector) finalizeIfPresent() {
+	if c.current.LengthInFrames() == 0 {
+		return
+	}
+	c.finalize()
+}
+
+func (c *collector) doAppendSegment(paddedSegment []byte, startInFrames, speechEndInFrames, endInFrames int) {
+	c.current.appendSegment(paddedSegment, startInFrames, speechEndInFrames, endInFrames)
+
+	c.finalizeIfMaxFrames()
+}
+
+func (c *collector) appendSegment(paddedSegment []byte, speechStartInFrames, startInFrames, speechEndInFrames, endInFrames int) {
+	if c.current.LengthInFrames() != 0 {
+		c.finalizeIfGap(speechStartInFrames)
+	}
+	c.doAppendSegment(paddedSegment, startInFrames, speechEndInFrames, endInFrames)
+}
+
+func float64SecondsToMillis(seconds float64) int {
+	return int(seconds * 1000)
+}
+
+func ceilDiv(a, b int) int {
+	return (a + b - 1) / b
+}
+
+/**
+ * The audio must be:
+ * - 16 bit: 1 frame takes 2 byte positions
+ * - 16 kHz: 16000 frames per second or 16 frames per millisecond
+ */
+func SegmentAudioByTimestampRanges(
+	audio []byte,
+	timestampRanges []speech.Segment,
+	padMillis int,
+	gapMaxMillis int,
+	fragmentMaxMillis int,
+) ([]Fragment, error) {
+	totalFrames := len(audio) / bytesPer16bitFrame
+	if len(audio) != totalFrames*bytesPer16bitFrame {
+		return nil, ErrAudioNotMultipleOf16Bits
+	}
+	totalMillis := ceilDiv(totalFrames, sampleRateKhz)
+
+	gapMaxFrames := gapMaxMillis * sampleRateKhz
+	fragmentMaxFrames := fragmentMaxMillis * sampleRateKhz
+
+	c := newCollector(SegmentationParams{
+		FragmentMaxFrames: fragmentMaxFrames,
+		GapMaxFrames:      gapMaxFrames,
+	})
+
+	n := len(timestampRanges)
+	prevEndMillis := 0
+	nextStartMillis := 0
+	if len(timestampRanges) > 0 {
+		nextStartMillis = float64SecondsToMillis(timestampRanges[0].SpeechStartAt)
+	}
+
+	for i := range timestampRanges {
+		startMillis := nextStartMillis
+		speechStartInFrames := startMillis * sampleRateKhz
+		if speechStartInFrames < 0 || speechStartInFrames >= totalFrames {
+			return nil, ErrSegmentStartTimestampOutOfRange
+		}
+
+		endMillis := float64SecondsToMillis(timestampRanges[i].SpeechEndAt)
+		speechEndInFrames := endMillis * sampleRateKhz
+		if speechEndInFrames <= speechStartInFrames {
+			return nil, ErrSegmentEndTimestampOutOfRange
+		}
+
+		prevGap := startMillis - prevEndMillis
+		var takeFromPrevGap int
+		if prevGap <= padMillis*2 {
+			takeFromPrevGap = prevGap - prevGap/2 // next segment takes half+0.5 if odd
+		} else {
+			takeFromPrevGap = padMillis
+		}
+
+		paddedStartMillis := startMillis - takeFromPrevGap
+
+		nextMillis := totalMillis
+		if i+1 < n {
+			nextStartMillis = float64SecondsToMillis(timestampRanges[i+1].SpeechStartAt)
+			nextMillis = nextStartMillis
+		}
+
+		nextGap := nextMillis - endMillis
+		var takeFromNextGap int
+		if nextGap <= padMillis*2 {
+			if i+1 < n {
+				takeFromNextGap = nextGap / 2 // prev segment takes half-0.5 if odd
+			} else {
+				// take whole gap if it's the last segment
+				takeFromNextGap = min(nextGap, padMillis)
+			}
+		} else {
+			takeFromNextGap = padMillis
+		}
+
+		paddedEndMillis := endMillis + takeFromNextGap
+
+		paddedStartInFrames := paddedStartMillis * sampleRateKhz
+		paddedEndInFrames := min(totalFrames, paddedEndMillis*sampleRateKhz)
+
+		c.appendSegment(
+			audio[paddedStartInFrames*bytesPer16bitFrame:paddedEndInFrames*bytesPer16bitFrame],
+			speechStartInFrames,
+			paddedStartInFrames,
+			speechEndInFrames,
+			paddedEndInFrames,
+		)
+
+		prevEndMillis = endMillis
+	}
+
+	c.finalizeIfPresent()
+
+	return c.fragments, nil
+}
