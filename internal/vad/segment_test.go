@@ -48,7 +48,7 @@ func Test_SegmentAudioByTimestampRanges_NoGap(t *testing.T) {
 	fragments, err := SegmentAudioByTimestampRanges(
 		audio,
 		[]speech.Segment{
-			speech.Segment{
+			{
 				SpeechStartAt: 0,
 				SpeechEndAt:   1,
 			},
@@ -99,7 +99,7 @@ func Test_SegmentAudioByTimestampRanges_OneSegment(t *testing.T) {
 	fragments, err := SegmentAudioByTimestampRanges(
 		audio,
 		[]speech.Segment{
-			speech.Segment{
+			{
 				SpeechStartAt: 0.001,
 				SpeechEndAt:   0.002,
 			},
@@ -144,7 +144,7 @@ func Test_SegmentAudioByTimestampRanges_OneSegmentWithGaps(t *testing.T) {
 	fragments, err := SegmentAudioByTimestampRanges(
 		audio,
 		[]speech.Segment{
-			speech.Segment{
+			{
 				SpeechStartAt: 0.002,
 				SpeechEndAt:   0.003,
 			},
@@ -193,11 +193,11 @@ func Test_SegmentAudioByTimestampRanges_TwoSegmentsSmallGap(t *testing.T) {
 	fragments, err := SegmentAudioByTimestampRanges(
 		audio,
 		[]speech.Segment{
-			speech.Segment{
+			{
 				SpeechStartAt: 0.002,
 				SpeechEndAt:   0.003,
 			},
-			speech.Segment{
+			{
 				SpeechStartAt: 0.004,
 				SpeechEndAt:   0.005,
 			},
@@ -222,8 +222,8 @@ func Test_SegmentAudioByTimestampRanges_TwoSegmentsSmallGap(t *testing.T) {
 		)
 	}
 	expectedRanges := []SegmentRange{
-		SegmentRange{16, 48, 0},
-		SegmentRange{48, 96, 32},
+		{16, 48, 0},
+		{48, 96, 32},
 	}
 	if !slices.Equal(expectedRanges, fragment.Ranges) {
 		t.Fatalf(
@@ -248,11 +248,11 @@ func Test_SegmentAudioByTimestampRanges_TwoSegmentsDoublePadGap(t *testing.T) {
 	fragments, err := SegmentAudioByTimestampRanges(
 		audio,
 		[]speech.Segment{
-			speech.Segment{
+			{
 				SpeechStartAt: 0.002,
 				SpeechEndAt:   0.003,
 			},
-			speech.Segment{
+			{
 				SpeechStartAt: 0.005,
 				SpeechEndAt:   0.006,
 			},
@@ -277,8 +277,8 @@ func Test_SegmentAudioByTimestampRanges_TwoSegmentsDoublePadGap(t *testing.T) {
 		)
 	}
 	expectedRanges := []SegmentRange{
-		SegmentRange{16, 64, 0},
-		SegmentRange{64, 112, 48},
+		{16, 64, 0},
+		{64, 112, 48},
 	}
 	if !slices.Equal(expectedRanges, fragment.Ranges) {
 		t.Fatalf(
@@ -304,11 +304,11 @@ func Test_SegmentAudioByTimestampRanges_TwoSegmentsWideGap(t *testing.T) {
 	fragments, err := SegmentAudioByTimestampRanges(
 		audio,
 		[]speech.Segment{
-			speech.Segment{
+			{
 				SpeechStartAt: 0.002,
 				SpeechEndAt:   0.003,
 			},
-			speech.Segment{
+			{
 				SpeechStartAt: 0.006,
 				SpeechEndAt:   0.007,
 			},
@@ -333,8 +333,8 @@ func Test_SegmentAudioByTimestampRanges_TwoSegmentsWideGap(t *testing.T) {
 		)
 	}
 	expectedRanges := []SegmentRange{
-		SegmentRange{16, 64, 0},
-		SegmentRange{80, 128, 48},
+		{16, 64, 0},
+		{80, 128, 48},
 	}
 	if !slices.Equal(expectedRanges, fragment.Ranges) {
 		t.Fatalf(
@@ -360,11 +360,11 @@ func Test_SegmentAudioByTimestampRanges_TwoSegmentsSplitBecauseGapMax(t *testing
 	fragments, err := SegmentAudioByTimestampRanges(
 		audio,
 		[]speech.Segment{
-			speech.Segment{
+			{
 				SpeechStartAt: 0.002,
 				SpeechEndAt:   0.003,
 			},
-			speech.Segment{
+			{
 				SpeechStartAt: 0.006,
 				SpeechEndAt:   0.007,
 			},
@@ -390,7 +390,7 @@ func Test_SegmentAudioByTimestampRanges_TwoSegmentsSplitBecauseGapMax(t *testing
 		)
 	}
 	expectedRanges1 := []SegmentRange{
-		SegmentRange{16, 64, 0},
+		{16, 64, 0},
 	}
 	if !slices.Equal(expectedRanges1, fragment1.Ranges) {
 		t.Fatalf(
@@ -410,7 +410,7 @@ func Test_SegmentAudioByTimestampRanges_TwoSegmentsSplitBecauseGapMax(t *testing
 		)
 	}
 	expectedRanges2 := []SegmentRange{
-		SegmentRange{80, 128, 0},
+		{80, 128, 0},
 	}
 	if !slices.Equal(expectedRanges2, fragment2.Ranges) {
 		t.Fatalf(
@@ -441,11 +441,11 @@ func Test_SegmentAudioByTimestampRanges_TwoSegmentsSplitBecauseFragmentMax(t *te
 		fragments, err := SegmentAudioByTimestampRanges(
 			audio,
 			[]speech.Segment{
-				speech.Segment{
+				{
 					SpeechStartAt: 0.002,
 					SpeechEndAt:   0.003,
 				},
-				speech.Segment{
+				{
 					SpeechStartAt: 0.006,
 					SpeechEndAt:   0.007,
 				},
@@ -544,7 +544,7 @@ func Test_SegmentAudioByTimestampRanges_ErrEndOutOfRange(t *testing.T) {
 		_, err := SegmentAudioByTimestampRanges(
 			audio,
 			[]speech.Segment{
-				speech.Segment{
+				{
 					SpeechStartAt: 0.002,
 					SpeechEndAt:   speechEnds[i],
 				},
@@ -562,5 +562,49 @@ func Test_SegmentAudioByTimestampRanges_ErrEndOutOfRange(t *testing.T) {
 				t.Fatalf("error occurred: %v", err)
 			}
 		}
+	}
+}
+
+func Test_SegmentAudioByTimestampRanges_Float64Round(t *testing.T) {
+	part1 := makeSeq(0, (1003-100)*16*2)
+	part2 := makeSeq(3, 100*16*2)
+	part3 := makeSeq(123, (1013-1003)*16*2)
+	audio := slices.Concat(part1, part2, part3)
+	fragments, err := SegmentAudioByTimestampRanges(
+		audio,
+		[]speech.Segment{
+			{
+				SpeechStartAt: 1.003, // naive rounding - `int(1.003*1000)` gives 1002
+				SpeechEndAt:   1.013,
+			},
+		},
+		100,
+		2000,
+		120_000,
+	)
+	if err != nil {
+		t.Fatal("error in SegmentAudioByTimestampRanges")
+	}
+	if len(fragments) != 1 {
+		t.Fatalf("%d fragments instead of 1", len(fragments))
+	}
+	fragment := fragments[0]
+	expectedContent := slices.Concat(part2, part3)
+	if !slices.Equal(expectedContent, fragment.Content) {
+		t.Fatalf(
+			"fragment has wrong content: %s instead of %s",
+			digestBytes(fragment.Content),
+			digestBytes(expectedContent),
+		)
+	}
+	expectedRanges := []SegmentRange{
+		{(1003 - 100) * 16, 1013 * 16, 0},
+	}
+	if !slices.Equal(expectedRanges, fragment.Ranges) {
+		t.Fatalf(
+			"fragment has wrong ranges: %s instead of %s",
+			digestSegmentRanges(fragment.Ranges),
+			digestSegmentRanges(expectedRanges),
+		)
 	}
 }

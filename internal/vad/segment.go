@@ -2,6 +2,7 @@ package vad
 
 import (
 	"errors"
+	"math"
 	"slices"
 
 	"github.com/streamer45/silero-vad-go/speech"
@@ -9,8 +10,6 @@ import (
 
 const (
 	bytesPer16bitFrame = 2
-
-	sampleRateHz = SampleRateKhz * 1000
 )
 
 var (
@@ -26,7 +25,7 @@ type SegmentRange struct {
 	CopyStart int
 }
 
-func (r *SegmentRange) GetDuration() int {
+func (r *SegmentRange) Duration() int {
 	return r.RealEnd - r.RealStart
 }
 
@@ -66,8 +65,9 @@ func (f *Fragment) appendSegment(content []byte, realStart, realSpeechEnd, realE
 
 func (f *Fragment) copy() Fragment {
 	return Fragment{
-		Content: slices.Clone(f.Content),
-		Ranges:  slices.Clone(f.Ranges),
+		Content:       slices.Clone(f.Content),
+		Ranges:        slices.Clone(f.Ranges),
+		RealSpeechEnd: f.RealSpeechEnd,
 	}
 }
 
@@ -130,7 +130,7 @@ func (c *collector) appendSegment(paddedSegment []byte, speechStartInFrames, sta
 }
 
 func float64SecondsToMillis(seconds float64) int {
-	return int(seconds * 1000)
+	return int(math.Round(seconds * 1000))
 }
 
 func ceilDiv(a, b int) int {
@@ -186,7 +186,12 @@ func SegmentAudioByTimestampRanges(
 		prevGap := startMillis - prevEndMillis
 		var takeFromPrevGap int
 		if prevGap <= padMillis*2 {
-			takeFromPrevGap = prevGap - prevGap/2 // next segment takes half+0.5 if odd
+			if i == 0 {
+				// take whole gap if it's the first segment
+				takeFromPrevGap = min(prevGap, padMillis)
+			} else {
+				takeFromPrevGap = prevGap - prevGap/2 // next segment takes half+0.5 if odd
+			}
 		} else {
 			takeFromPrevGap = padMillis
 		}
@@ -216,6 +221,9 @@ func SegmentAudioByTimestampRanges(
 
 		paddedStartInFrames := paddedStartMillis * SampleRateKhz
 		paddedEndInFrames := min(totalFrames, paddedEndMillis*SampleRateKhz)
+
+		//log.Printf("startMillis %d\n", startMillis)
+		//log.Printf("taking range: %d -> %d\n", paddedStartInFrames, paddedEndInFrames)
 
 		c.appendSegment(
 			audio[paddedStartInFrames*bytesPer16bitFrame:paddedEndInFrames*bytesPer16bitFrame],
