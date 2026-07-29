@@ -10,8 +10,7 @@ import (
 const (
 	bytesPer16bitFrame = 2
 
-	sampleRateKhz = 16
-	sampleRateHz  = sampleRateKhz * 1000
+	sampleRateHz = SampleRateKhz * 1000
 )
 
 var (
@@ -25,6 +24,10 @@ type SegmentRange struct {
 	RealStart int // with padding
 	RealEnd   int // with padding
 	CopyStart int
+}
+
+func (r *SegmentRange) GetDuration() int {
+	return r.RealEnd - r.RealStart
 }
 
 type Fragment struct {
@@ -150,10 +153,10 @@ func SegmentAudioByTimestampRanges(
 	if len(audio) != totalFrames*bytesPer16bitFrame {
 		return nil, ErrAudioNotMultipleOf16Bits
 	}
-	totalMillis := ceilDiv(totalFrames, sampleRateKhz)
+	totalMillis := ceilDiv(totalFrames, SampleRateKhz)
 
-	gapMaxFrames := gapMaxMillis * sampleRateKhz
-	fragmentMaxFrames := fragmentMaxMillis * sampleRateKhz
+	gapMaxFrames := gapMaxMillis * SampleRateKhz
+	fragmentMaxFrames := fragmentMaxMillis * SampleRateKhz
 
 	c := newCollector(SegmentationParams{
 		FragmentMaxFrames: fragmentMaxFrames,
@@ -169,13 +172,13 @@ func SegmentAudioByTimestampRanges(
 
 	for i := range timestampRanges {
 		startMillis := nextStartMillis
-		speechStartInFrames := startMillis * sampleRateKhz
+		speechStartInFrames := startMillis * SampleRateKhz
 		if speechStartInFrames < 0 || speechStartInFrames >= totalFrames {
 			return nil, ErrSegmentStartTimestampOutOfRange
 		}
 
 		endMillis := float64SecondsToMillis(timestampRanges[i].SpeechEndAt)
-		speechEndInFrames := endMillis * sampleRateKhz
+		speechEndInFrames := endMillis * SampleRateKhz
 		if speechEndInFrames <= speechStartInFrames {
 			return nil, ErrSegmentEndTimestampOutOfRange
 		}
@@ -211,8 +214,8 @@ func SegmentAudioByTimestampRanges(
 
 		paddedEndMillis := endMillis + takeFromNextGap
 
-		paddedStartInFrames := paddedStartMillis * sampleRateKhz
-		paddedEndInFrames := min(totalFrames, paddedEndMillis*sampleRateKhz)
+		paddedStartInFrames := paddedStartMillis * SampleRateKhz
+		paddedEndInFrames := min(totalFrames, paddedEndMillis*SampleRateKhz)
 
 		c.appendSegment(
 			audio[paddedStartInFrames*bytesPer16bitFrame:paddedEndInFrames*bytesPer16bitFrame],
