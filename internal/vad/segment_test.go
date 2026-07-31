@@ -46,6 +46,7 @@ func digestSegmentRanges(ranges []SegmentRange) string {
 func Test_SegmentAudioByTimestampRanges_NoGap(t *testing.T) {
 	audio := []byte{1, 2, 3, 4}
 	fragments, err := SegmentAudioByTimestampRanges(
+		getLog(),
 		audio,
 		[]speech.Segment{
 			{
@@ -97,6 +98,7 @@ func Test_SegmentAudioByTimestampRanges_OneSegment(t *testing.T) {
 	ms3 := makeSeq(64, 16*2)
 	audio := slices.Concat(ms1, ms2, ms3)
 	fragments, err := SegmentAudioByTimestampRanges(
+		getLog(),
 		audio,
 		[]speech.Segment{
 			{
@@ -142,6 +144,7 @@ func Test_SegmentAudioByTimestampRanges_OneSegmentWithGaps(t *testing.T) {
 	ms5 := makeSeq(128, 16*2)
 	audio := slices.Concat(ms1, ms2, ms3, ms4, ms5)
 	fragments, err := SegmentAudioByTimestampRanges(
+		getLog(),
 		audio,
 		[]speech.Segment{
 			{
@@ -191,6 +194,7 @@ func Test_SegmentAudioByTimestampRanges_TwoSegmentsSmallGap(t *testing.T) {
 
 	audio := slices.Concat(ms1, ms2, ms3, ms4, ms5, ms6, ms7)
 	fragments, err := SegmentAudioByTimestampRanges(
+		getLog(),
 		audio,
 		[]speech.Segment{
 			{
@@ -246,6 +250,7 @@ func Test_SegmentAudioByTimestampRanges_TwoSegmentsDoublePadGap(t *testing.T) {
 
 	audio := slices.Concat(ms1, ms2, ms3, ms4, ms5, ms6, ms7, ms8)
 	fragments, err := SegmentAudioByTimestampRanges(
+		getLog(),
 		audio,
 		[]speech.Segment{
 			{
@@ -302,6 +307,7 @@ func Test_SegmentAudioByTimestampRanges_TwoSegmentsWideGap(t *testing.T) {
 
 	audio := slices.Concat(ms1, ms2, ms3, ms4, ms5, ms6, ms7, ms8, ms9)
 	fragments, err := SegmentAudioByTimestampRanges(
+		getLog(),
 		audio,
 		[]speech.Segment{
 			{
@@ -358,6 +364,7 @@ func Test_SegmentAudioByTimestampRanges_TwoSegmentsSplitBecauseGapMax(t *testing
 
 	audio := slices.Concat(ms1, ms2, ms3, ms4, ms5, ms6, ms7, ms8, ms9)
 	fragments, err := SegmentAudioByTimestampRanges(
+		getLog(),
 		audio,
 		[]speech.Segment{
 			{
@@ -439,6 +446,7 @@ func Test_SegmentAudioByTimestampRanges_TwoSegmentsSplitBecauseFragmentMax(t *te
 
 	for varIndex := range 5 {
 		fragments, err := SegmentAudioByTimestampRanges(
+			getLog(),
 			audio,
 			[]speech.Segment{
 				{
@@ -483,6 +491,7 @@ func Test_SegmentAudioByTimestampRanges_AudioLength(t *testing.T) {
 
 	for audioLength := range 32 {
 		fragments, err := SegmentAudioByTimestampRanges(
+			getLog(),
 			audio[:audioLength],
 			[]speech.Segment{
 				speech.Segment{
@@ -542,6 +551,7 @@ func Test_SegmentAudioByTimestampRanges_ErrEndOutOfRange(t *testing.T) {
 
 	for i := range 3 {
 		_, err := SegmentAudioByTimestampRanges(
+			getLog(),
 			audio,
 			[]speech.Segment{
 				{
@@ -571,6 +581,7 @@ func Test_SegmentAudioByTimestampRanges_Float64Round(t *testing.T) {
 	part3 := makeSeq(123, (1013-1003)*16*2)
 	audio := slices.Concat(part1, part2, part3)
 	fragments, err := SegmentAudioByTimestampRanges(
+		getLog(),
 		audio,
 		[]speech.Segment{
 			{

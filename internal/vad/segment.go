@@ -3,6 +3,7 @@ package vad
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"slices"
 
@@ -144,6 +145,7 @@ func ceilDiv(a, b int) int {
  * - 16 kHz: 16000 frames per second or 16 frames per millisecond
  */
 func SegmentAudioByTimestampRanges(
+	log *slog.Logger,
 	audio []byte,
 	timestampRanges []speech.Segment,
 	padMillis int,
@@ -175,6 +177,15 @@ func SegmentAudioByTimestampRanges(
 		startMillis := nextStartMillis
 		speechStartInFrames := startMillis * SampleRateKhz
 		if speechStartInFrames < 0 || speechStartInFrames >= totalFrames {
+			log.Error(
+				"segment start timestamp out of range",
+				"func", "SegmentAudioByTimestampRanges",
+				"i", i,
+				"speechStartInFrames", speechStartInFrames,
+				"totalFrames", totalFrames,
+				"SpeechEndAt", timestampRanges[i].SpeechEndAt,
+				"timestampRanges", len(timestampRanges),
+			)
 			return nil, ErrSegmentStartTimestampOutOfRange
 		}
 

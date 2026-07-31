@@ -305,6 +305,7 @@ func (t *elevenTranscriber) Transcribe(
 		printDetectedTimestamps(speechSegments)
 	}
 	fragments, err := vad.SegmentAudioByTimestampRanges(
+		t.logger,
 		pcm,
 		speechSegments,
 		/* padMillis */ 100,
