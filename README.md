@@ -52,7 +52,7 @@ There is an extra byte at the start, that is removed by `tail`. The cause is not
 ## ASR worker
 
 ```
-LD_LIBRARY_PATH=$PWD/vosk-api/src ./bin/asr
+LD_LIBRARY_PATH=${PWD}/vosk-api/src:${PWD}/onnxruntime/lib ./bin/asr
 ```
 
 ## Init prod DB

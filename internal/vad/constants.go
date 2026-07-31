@@ -1,5 +1,6 @@
 package vad
 
 const (
-	SampleRateKhz = 16
+	BytesPer16bitFrame = 2
+	SampleRateKhz      = 16
 )

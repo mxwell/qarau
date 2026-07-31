@@ -2,14 +2,11 @@ package vad
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"slices"
 
 	"github.com/streamer45/silero-vad-go/speech"
-)
-
-const (
-	bytesPer16bitFrame = 2
 )
 
 var (
@@ -23,6 +20,10 @@ type SegmentRange struct {
 	RealStart int // with padding
 	RealEnd   int // with padding
 	CopyStart int
+}
+
+func (r *SegmentRange) String() string {
+	return fmt.Sprintf("{ %d-%d -> %d }", r.RealStart, r.RealEnd, r.CopyStart)
 }
 
 func (r *SegmentRange) Duration() int {
@@ -41,7 +42,7 @@ func (f *Fragment) reset() {
 }
 
 func (f *Fragment) LengthInFrames() int {
-	return len(f.Content) / bytesPer16bitFrame
+	return len(f.Content) / BytesPer16bitFrame
 }
 
 func (f *Fragment) getRealEnd() int {
@@ -149,8 +150,8 @@ func SegmentAudioByTimestampRanges(
 	gapMaxMillis int,
 	fragmentMaxMillis int,
 ) ([]Fragment, error) {
-	totalFrames := len(audio) / bytesPer16bitFrame
-	if len(audio) != totalFrames*bytesPer16bitFrame {
+	totalFrames := len(audio) / BytesPer16bitFrame
+	if len(audio) != totalFrames*BytesPer16bitFrame {
 		return nil, ErrAudioNotMultipleOf16Bits
 	}
 	totalMillis := ceilDiv(totalFrames, SampleRateKhz)
@@ -226,7 +227,7 @@ func SegmentAudioByTimestampRanges(
 		//log.Printf("taking range: %d -> %d\n", paddedStartInFrames, paddedEndInFrames)
 
 		c.appendSegment(
-			audio[paddedStartInFrames*bytesPer16bitFrame:paddedEndInFrames*bytesPer16bitFrame],
+			audio[paddedStartInFrames*BytesPer16bitFrame:paddedEndInFrames*BytesPer16bitFrame],
 			speechStartInFrames,
 			paddedStartInFrames,
 			speechEndInFrames,

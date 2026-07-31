@@ -20,6 +20,7 @@ type ASRConfig struct {
 	WorkingDir   string
 	RemoveFiles  bool
 	FfmpegTool   string
+	VadModel     string
 	VoskModel    string
 	ElevenApiKey string
 	PcmFile      string // for testing purposes
@@ -66,6 +67,7 @@ func LoadASR() (ASRConfig, error) {
 		WorkingDir:   v.GetString("WORKING_DIR"),
 		RemoveFiles:  v.GetUint8("REMOVE_FILES") > 0,
 		FfmpegTool:   v.GetString("FFMPEG"),
+		VadModel:     v.GetString("VAD_MODEL"),
 		VoskModel:    v.GetString("VOSK_MODEL"),
 		ElevenApiKey: v.GetString("ELEVEN_API_KEY"),
 		PcmFile:      v.GetString("PCM_FILE"),
@@ -90,6 +92,9 @@ func LoadASR() (ASRConfig, error) {
 	}
 	if !strings.HasPrefix(cfg.FfmpegTool, "/") {
 		return ASRConfig{}, fmt.Errorf("ASR config error: invalid ffmpeg path '%v'", cfg.FfmpegTool)
+	}
+	if !strings.HasPrefix(cfg.VadModel, "/") {
+		return ASRConfig{}, fmt.Errorf("ASR config error: invalid VAD model path '%v'", cfg.VadModel)
 	}
 	if cfg.VoskModel != "" {
 		if !strings.HasPrefix(cfg.VoskModel, "/") {

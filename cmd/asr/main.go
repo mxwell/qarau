@@ -18,11 +18,13 @@ import (
 	"github.com/mxwell/qarau/internal/constants"
 	"github.com/mxwell/qarau/internal/eleven"
 	"github.com/mxwell/qarau/internal/logging"
+	"github.com/mxwell/qarau/internal/vad"
+	"github.com/streamer45/silero-vad-go/speech"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
 
-func createTranscriber(logger *slog.Logger, cfg config.ASRConfig) (asr.Transcriber, error) {
+func createTranscriber(logger *slog.Logger, cfg config.ASRConfig, testMode bool) (asr.Transcriber, error) {
 	if cfg.VoskModel != "" {
 		result, err := asr.NewVoskTranscriber(logger, cfg.VoskModel)
 		if err == nil {
@@ -30,7 +32,17 @@ func createTranscriber(logger *slog.Logger, cfg config.ASRConfig) (asr.Transcrib
 		}
 		return result, err
 	} else if cfg.ElevenApiKey != "" {
-		result, err := eleven.NewElevenTranscriber(logger, cfg.ElevenApiKey, false)
+		detector, err := speech.NewDetector(speech.DetectorConfig{
+			ModelPath:            cfg.VadModel,
+			SampleRate:           vad.SampleRateKhz * 1000,
+			Threshold:            0.5,
+			MinSilenceDurationMs: 100,
+			SpeechPadMs:          30,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create VAD: %w", err)
+		}
+		result, err := eleven.NewElevenTranscriber(logger, detector, cfg.ElevenApiKey, testMode)
 		if err == nil {
 			logger.Info("created Eleven transcriber")
 		}
@@ -42,9 +54,9 @@ func createTranscriber(logger *slog.Logger, cfg config.ASRConfig) (asr.Transcrib
 
 func runAsTestTool(ctx context.Context, logger *slog.Logger, cfg config.ASRConfig) error {
 	if cfg.ElevenApiKey == "" {
-		return fmt.Errorf("test tools needs Eleven API key")
+		return fmt.Errorf("test tool needs Eleven API key")
 	}
-	transcriber, err := eleven.NewElevenTranscriber(logger, cfg.ElevenApiKey, true)
+	transcriber, err := createTranscriber(logger, cfg, true /* testMode */)
 	if err != nil {
 		return err
 	}
@@ -123,7 +135,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	transcriber, err := createTranscriber(logger, cfg)
+	transcriber, err := createTranscriber(logger, cfg, false /* testMode */)
 	if err != nil {
 		return err
 	}
