@@ -17,6 +17,7 @@ import (
 	"github.com/mxwell/qarau/internal/config"
 	"github.com/mxwell/qarau/internal/constants"
 	"github.com/mxwell/qarau/internal/eleven"
+	"github.com/mxwell/qarau/internal/langid"
 	"github.com/mxwell/qarau/internal/logging"
 	"github.com/mxwell/qarau/internal/vad"
 	"github.com/streamer45/silero-vad-go/speech"
@@ -42,7 +43,17 @@ func createTranscriber(logger *slog.Logger, cfg config.ASRConfig, testMode bool)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create VAD: %w", err)
 		}
-		result, err := eleven.NewElevenTranscriber(logger, detector, cfg.ElevenApiKey, testMode)
+		classifier, err := langid.New(cfg.LangIdDir, cfg.SharedLibDir)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create LangID: %w", err)
+		}
+		result, err := eleven.NewElevenTranscriber(
+			logger,
+			detector,
+			classifier,
+			cfg.ElevenApiKey,
+			testMode,
+		)
 		if err == nil {
 			logger.Info("created Eleven transcriber")
 		}

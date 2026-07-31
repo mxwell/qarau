@@ -16,15 +16,17 @@ import (
 	qarauv1 "github.com/mxwell/qarau/gen/qarau/v1"
 	"github.com/mxwell/qarau/internal/asr"
 	"github.com/mxwell/qarau/internal/constants"
+	"github.com/mxwell/qarau/internal/langid"
 	"github.com/mxwell/qarau/internal/vad"
 	"github.com/streamer45/silero-vad-go/speech"
 )
 
 type elevenTranscriber struct {
-	logger   *slog.Logger
-	detector *speech.Detector
-	apiKey   string
-	testMode bool
+	logger     *slog.Logger
+	detector   *speech.Detector
+	classifier *langid.Classifier
+	apiKey     string
+	testMode   bool
 }
 
 const (
@@ -41,6 +43,7 @@ const (
 func NewElevenTranscriber(
 	logger *slog.Logger,
 	detector *speech.Detector,
+	classifier *langid.Classifier,
 	apiKey string,
 	testMode bool,
 ) (asr.Transcriber, error) {
@@ -50,14 +53,18 @@ func NewElevenTranscriber(
 	if detector == nil {
 		return nil, errors.New("nil detector in elevenTranscriber creation")
 	}
+	if classifier == nil {
+		return nil, errors.New("nil classifier in elevenTranscriber creation")
+	}
 	if apiKey == "" {
 		return nil, errors.New("empty apiKey in elevenTranscriber creation")
 	}
 	return &elevenTranscriber{
-		logger:   logger,
-		detector: detector,
-		apiKey:   apiKey,
-		testMode: testMode,
+		logger:     logger,
+		detector:   detector,
+		classifier: classifier,
+		apiKey:     apiKey,
+		testMode:   testMode,
 	}, nil
 }
 

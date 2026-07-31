@@ -21,6 +21,8 @@ type ASRConfig struct {
 	RemoveFiles  bool
 	FfmpegTool   string
 	VadModel     string
+	LangIdDir    string
+	SharedLibDir string
 	VoskModel    string
 	ElevenApiKey string
 	PcmFile      string // for testing purposes
@@ -68,6 +70,8 @@ func LoadASR() (ASRConfig, error) {
 		RemoveFiles:  v.GetUint8("REMOVE_FILES") > 0,
 		FfmpegTool:   v.GetString("FFMPEG"),
 		VadModel:     v.GetString("VAD_MODEL"),
+		LangIdDir:    v.GetString("LANG_ID_DIR"),
+		SharedLibDir: v.GetString("SHARED_LIB_DIR"),
 		VoskModel:    v.GetString("VOSK_MODEL"),
 		ElevenApiKey: v.GetString("ELEVEN_API_KEY"),
 		PcmFile:      v.GetString("PCM_FILE"),
@@ -95,6 +99,12 @@ func LoadASR() (ASRConfig, error) {
 	}
 	if !strings.HasPrefix(cfg.VadModel, "/") {
 		return ASRConfig{}, fmt.Errorf("ASR config error: invalid VAD model path '%v'", cfg.VadModel)
+	}
+	if !strings.HasPrefix(cfg.LangIdDir, "/") {
+		return ASRConfig{}, fmt.Errorf("ASR config error: invalid LangID model dir '%v'", cfg.LangIdDir)
+	}
+	if !strings.HasPrefix(cfg.SharedLibDir, "/") {
+		return ASRConfig{}, fmt.Errorf("ASR config error: invalid shared lib dir '%v'", cfg.SharedLibDir)
 	}
 	if cfg.VoskModel != "" {
 		if !strings.HasPrefix(cfg.VoskModel, "/") {
