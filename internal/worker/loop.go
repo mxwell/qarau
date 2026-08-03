@@ -38,7 +38,7 @@ func Loop[Job IdentifiableJob](ctx context.Context, logger *slog.Logger, claimer
 	maxBackOffPeriod := 10 * time.Minute
 	backOffPeriod := initialBackOffPeriod
 
-	pollPeriod := 30 * time.Second
+	pollPeriod := 10 * time.Second
 	logCounter := 0
 
 	for {
