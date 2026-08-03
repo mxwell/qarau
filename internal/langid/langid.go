@@ -152,6 +152,6 @@ func (c *Classifier) IsKazakh(f32Data []float32) (bool, error) {
 		prob := math.Exp(float64(logp[index]))
 		topLanguages = append(topLanguages, fmt.Sprintf("%s - %f", c.labels[index], prob))
 	}
-	c.logger.Info("languages identified", "isKazakh", isKazakh, "topLanguages", topLanguages, "time", elapsed)
+	c.logger.Info("languages identified", "isKazakh", isKazakh, "topLanguages", topLanguages, "timeMs", int(elapsed/1e6))
 	return isKazakh, nil
 }
