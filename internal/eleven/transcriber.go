@@ -198,6 +198,7 @@ func (t *elevenTranscriber) parseEleven(data []byte) (*qarauv1.Transcription, er
 
 func (t *elevenTranscriber) applyVad(f32Data []float32) ([]speech.Segment, error) {
 	frames := len(f32Data)
+	t.detector.Reset() // detector accumulates state across runs, let's reset it
 	segments, err := t.detector.Detect(f32Data)
 	if err != nil {
 		t.logger.Error("vad failed", "frames", frames, "err", err)
