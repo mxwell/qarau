@@ -129,3 +129,52 @@ losing it means every cert issued from it should be considered compromised.
 
 825 days is an arbitrary rotation cadence (no automated renewal exists yet); reissue
 leaf certs from the same `ca.crt`/`ca.key` before they expire.
+
+## Lang ID
+
+Export Torch model for ONNX Runtime
+
+```python
+$ uv venv
+$ source .venv/bin/activate
+$ uv pip --cache-dir ${PWD}/uv_cache install git+https://github.com/speechbrain/speechbrain.git@develop ipython <...>
+$ ipython
+
+from speechbrain.inference.classifiers import EncoderClassifier
+
+language_id = EncoderClassifier.from_hparams(source="speechbrain/lang-id-voxlingua107-ecapa", savedir="tmp")
+
+class LangIDWrapper(torch.nn.Module):
+    def __init__(self, mods):
+        super().__init__()
+        self.compute_features = mods.compute_features   # Fbank (contains STFT)
+        self.mean_var_norm    = mods.mean_var_norm      # per-utterance norm
+        self.embedding_model  = mods.embedding_model    # ECAPA-TDNN
+        self.classifier       = mods.classifier         # Linear + log_softm
+    def forward(self, wavs):                    # wavs: [batch, time]
+        wav_lens = torch.ones(wavs.shape[0], device=wavs.device)  # all full-length
+        feats = self.compute_features(wavs)
+        feats = self.mean_var_norm(feats, wav_lens)
+        emb   = self.embedding_model(feats, wav_lens)
+        return self.classifier(emb).squeeze(1)  # [batch, 107] log-pro
+
+wrapper = LangIDWrapper(language_id.mods).eval()
+
+dummy = torch.randn(1, 16000 * 10)              # 1 clip, 10 s @ 16 kHz
+
+torch.onnx.export(
+    wrapper,
+    (dummy,),
+    "voxlingua107_ecapa.onnx",
+    input_names=["waveform"],
+    output_names=["log_probs"],
+    dynamic_axes={"waveform": {1: "time"}, "log_probs": {0: "batch"}},
+    opset_version=18,                           # STFT needs >= 17
+    do_constant_folding=True,
+)
+
+enc = language_id.hparams.label_encoder
+labels = [enc.ind2lab[i] for i in range(len(enc.ind2lab))]  # expected 107 language labels in the format 'kk: Kazakh'
+with open("voxlingua107_labels.json", "w") as f:
+    json.dump(labels, f, ensure_ascii=False, indent=2)
+```
