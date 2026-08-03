@@ -13,8 +13,7 @@ import (
 )
 
 var (
-	ErrAudioNotMultipleOf16Bits        = errors.New("audio length is not a multiple of 16 bits")
-	ErrSegmentStartTimestampOutOfRange = errors.New("segment start timestamp out of range")
+	ErrAudioNotMultipleOf16Bits = errors.New("audio length is not a multiple of 16 bits")
 
 	BytesPer16bitFrame = audio.BytesPer16bitFrame
 	SampleRateKhz      = audio.SampleRateKhz
@@ -172,13 +171,9 @@ func SegmentAudioByTimestampRanges(
 
 	n := len(timestampRanges)
 	prevEndMillis := 0
-	nextStartMillis := 0
-	if len(timestampRanges) > 0 {
-		nextStartMillis = float64SecondsToMillis(timestampRanges[0].SpeechStartAt)
-	}
 
 	for i := range timestampRanges {
-		startMillis := nextStartMillis
+		startMillis := float64SecondsToMillis(timestampRanges[i].SpeechStartAt)
 		speechStartInFrames := startMillis * SampleRateKhz
 		if speechStartInFrames < 0 || speechStartInFrames >= totalFrames {
 			log.Error(
@@ -190,7 +185,7 @@ func SegmentAudioByTimestampRanges(
 				"SpeechEndAt", timestampRanges[i].SpeechEndAt,
 				"timestampRanges", len(timestampRanges),
 			)
-			return nil, ErrSegmentStartTimestampOutOfRange
+			continue
 		}
 
 		endMillis := float64SecondsToMillis(timestampRanges[i].SpeechEndAt)
@@ -226,8 +221,7 @@ func SegmentAudioByTimestampRanges(
 
 		nextMillis := totalMillis
 		if i+1 < n {
-			nextStartMillis = float64SecondsToMillis(timestampRanges[i+1].SpeechStartAt)
-			nextMillis = nextStartMillis
+			nextMillis = float64SecondsToMillis(timestampRanges[i+1].SpeechStartAt)
 		}
 
 		nextGap := nextMillis - endMillis

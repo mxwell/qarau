@@ -509,12 +509,6 @@ func Test_SegmentAudioByTimestampRanges_AudioLength(t *testing.T) {
 			}
 			continue
 		}
-		if audioLength < 2 {
-			if !errors.Is(err, ErrSegmentStartTimestampOutOfRange) {
-				t.Fatalf("ErrSegmentStartTimestampOutOfRange must occur for short len %d: %v", audioLength, err)
-			}
-			continue
-		}
 		if err != nil {
 			t.Fatalf("error in SegmentAudioByTimestampRanges: %v", err)
 		}
