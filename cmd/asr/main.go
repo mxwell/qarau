@@ -43,7 +43,7 @@ func createTranscriber(logger *slog.Logger, cfg config.ASRConfig, testMode bool)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create VAD: %w", err)
 		}
-		classifier, err := langid.New(logger, cfg.LangIdDir, cfg.SharedLibDir)
+		classifier, err := langid.New(logger, cfg.LangIdDir, cfg.OnnxLib)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create LangID: %w", err)
 		}

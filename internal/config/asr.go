@@ -22,7 +22,7 @@ type ASRConfig struct {
 	FfmpegTool   string
 	VadModel     string
 	LangIdDir    string
-	SharedLibDir string
+	OnnxLib      string
 	VoskModel    string
 	ElevenApiKey string
 	PcmFile      string // for testing purposes
@@ -71,7 +71,7 @@ func LoadASR() (ASRConfig, error) {
 		FfmpegTool:   v.GetString("FFMPEG"),
 		VadModel:     v.GetString("VAD_MODEL"),
 		LangIdDir:    v.GetString("LANG_ID_DIR"),
-		SharedLibDir: v.GetString("SHARED_LIB_DIR"),
+		OnnxLib:      v.GetString("ONNX_LIB"),
 		VoskModel:    v.GetString("VOSK_MODEL"),
 		ElevenApiKey: v.GetString("ELEVEN_API_KEY"),
 		PcmFile:      v.GetString("PCM_FILE"),
@@ -103,8 +103,8 @@ func LoadASR() (ASRConfig, error) {
 	if !strings.HasPrefix(cfg.LangIdDir, "/") {
 		return ASRConfig{}, fmt.Errorf("ASR config error: invalid LangID model dir '%v'", cfg.LangIdDir)
 	}
-	if !strings.HasPrefix(cfg.SharedLibDir, "/") {
-		return ASRConfig{}, fmt.Errorf("ASR config error: invalid shared lib dir '%v'", cfg.SharedLibDir)
+	if !strings.HasPrefix(cfg.OnnxLib, "/") {
+		return ASRConfig{}, fmt.Errorf("ASR config error: invalid ONNX runtime shared lib '%v'", cfg.OnnxLib)
 	}
 	if cfg.VoskModel != "" {
 		if !strings.HasPrefix(cfg.VoskModel, "/") {
