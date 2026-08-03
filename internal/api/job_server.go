@@ -333,7 +333,7 @@ func (s *JobServer) FailJob(ctx context.Context, request *qarauv1.FailJobRequest
 		return nil, err
 	}
 	s.logger.Info("received FailJob request", "job", request.JobId, "worker", workerID, "errorMessage", request.ErrorMessage)
-	if err := s.service.FailJob(ctx, request.JobId, workerID, request.ErrorMessage); err != nil {
+	if err := s.service.FailJob(ctx, request.JobId, workerID, request.ErrorMessage, request.Final); err != nil {
 		return &qarauv1.FailJobResponse{}, status.Error(codes.Internal, "failed to mark the job failed")
 	}
 	return &qarauv1.FailJobResponse{}, nil

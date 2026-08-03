@@ -320,7 +320,12 @@ func (s *VideoService) GetVideoProcess(ctx context.Context, videoID int64) (Vide
 		case dbgen.JobTypeFetch:
 			errorMessage = "fetch fail"
 		case dbgen.JobTypeAsr:
-			errorMessage = "asr fail"
+			lastErr := latestJob.LastError
+			if lastErr != nil {
+				errorMessage = fmt.Sprintf("asr fail: %s", *lastErr)
+			} else {
+				errorMessage = "asr fail"
+			}
 		}
 		return VideoProcess{
 			State:        ProcessingStateFailed,

@@ -319,7 +319,7 @@ func (s *JobService) CompleteAsrJob(ctx context.Context, workerID string, jobID 
 	return tx.Commit(ctx)
 }
 
-func (s *JobService) FailJob(ctx context.Context, jobID int64, workerID string, errorMessage string) error {
+func (s *JobService) FailJob(ctx context.Context, jobID int64, workerID string, errorMessage string, final bool) error {
 	job, err := s.queries.GetJob(ctx, jobID)
 	if err != nil {
 		s.log.Error("failed to load job to mark failed", "job", jobID, "err", err)
@@ -333,7 +333,7 @@ func (s *JobService) FailJob(ctx context.Context, jobID int64, workerID string, 
 		s.log.Error("job not locked by worker", "job", jobID, "locked_by", job.LockedBy, "worker", workerID)
 		return errors.New("this worker not allowed to modify the job")
 	}
-	if job.Attempts < job.MaxAttempts {
+	if job.Attempts < job.MaxAttempts && !final {
 		_, err = s.queries.UnlockJob(ctx, dbgen.UnlockJobParams{
 			ErrorMessage: &errorMessage,
 			JobID:        jobID,

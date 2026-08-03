@@ -8,12 +8,16 @@ import (
 	"slices"
 
 	"github.com/streamer45/silero-vad-go/speech"
+
+	"github.com/mxwell/qarau/internal/audio"
 )
 
 var (
 	ErrAudioNotMultipleOf16Bits        = errors.New("audio length is not a multiple of 16 bits")
 	ErrSegmentStartTimestampOutOfRange = errors.New("segment start timestamp out of range")
-	ErrSegmentEndTimestampOutOfRange   = errors.New("segment end timestamp out of range")
+
+	BytesPer16bitFrame = audio.BytesPer16bitFrame
+	SampleRateKhz      = audio.SampleRateKhz
 )
 
 /* Values are frame indices */
@@ -43,7 +47,7 @@ func (f *Fragment) reset() {
 }
 
 func (f *Fragment) LengthInFrames() int {
-	return len(f.Content) / BytesPer16bitFrame
+	return len(f.Content) / audio.BytesPer16bitFrame
 }
 
 func (f *Fragment) getRealEnd() int {
@@ -146,14 +150,14 @@ func ceilDiv(a, b int) int {
  */
 func SegmentAudioByTimestampRanges(
 	log *slog.Logger,
-	audio []byte,
+	pcm []byte,
 	timestampRanges []speech.Segment,
 	padMillis int,
 	gapMaxMillis int,
 	fragmentMaxMillis int,
 ) ([]Fragment, error) {
-	totalFrames := len(audio) / BytesPer16bitFrame
-	if len(audio) != totalFrames*BytesPer16bitFrame {
+	totalFrames := len(pcm) / BytesPer16bitFrame
+	if len(pcm) != totalFrames*BytesPer16bitFrame {
 		return nil, ErrAudioNotMultipleOf16Bits
 	}
 	totalMillis := ceilDiv(totalFrames, SampleRateKhz)
@@ -192,7 +196,17 @@ func SegmentAudioByTimestampRanges(
 		endMillis := float64SecondsToMillis(timestampRanges[i].SpeechEndAt)
 		speechEndInFrames := endMillis * SampleRateKhz
 		if speechEndInFrames <= speechStartInFrames {
-			return nil, ErrSegmentEndTimestampOutOfRange
+			log.Error(
+				"segment end timestamp out of range",
+				"func", "SegmentAudioByTimestampRanges",
+				"i", i,
+				"speechStartInFrames", speechStartInFrames,
+				"speechEndInFrames", speechEndInFrames,
+				"totalFrames", totalFrames,
+				"SpeechEndAt", timestampRanges[i].SpeechEndAt,
+				"timestampRanges", len(timestampRanges),
+			)
+			continue
 		}
 
 		prevGap := startMillis - prevEndMillis
@@ -238,7 +252,7 @@ func SegmentAudioByTimestampRanges(
 		//log.Printf("taking range: %d -> %d\n", paddedStartInFrames, paddedEndInFrames)
 
 		c.appendSegment(
-			audio[paddedStartInFrames*BytesPer16bitFrame:paddedEndInFrames*BytesPer16bitFrame],
+			pcm[paddedStartInFrames*BytesPer16bitFrame:paddedEndInFrames*BytesPer16bitFrame],
 			speechStartInFrames,
 			paddedStartInFrames,
 			speechEndInFrames,
@@ -251,4 +265,20 @@ func SegmentAudioByTimestampRanges(
 	c.finalizeIfPresent()
 
 	return c.fragments, nil
+}
+
+func StitchAsFloat32(fragments []Fragment, cutAtFrames int) ([]float32, error) {
+	result := make([]float32, 0)
+	for _, f := range fragments {
+		f32Data, err := audio.Convert16BitBytesToF32(f.Content)
+		if err != nil {
+			return nil, err
+		}
+		take := min(len(f32Data), cutAtFrames-len(result))
+		result = append(result, f32Data[:take]...)
+		if len(result) >= cutAtFrames {
+			break
+		}
+	}
+	return result, nil
 }

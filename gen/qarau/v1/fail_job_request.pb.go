@@ -25,6 +25,7 @@ type FailJobRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	JobId         int64                  `protobuf:"varint,1,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
 	ErrorMessage  string                 `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Final         bool                   `protobuf:"varint,3,opt,name=final,proto3" json:"final,omitempty"` // don't retry
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -73,14 +74,22 @@ func (x *FailJobRequest) GetErrorMessage() string {
 	return ""
 }
 
+func (x *FailJobRequest) GetFinal() bool {
+	if x != nil {
+		return x.Final
+	}
+	return false
+}
+
 var File_qarau_v1_fail_job_request_proto protoreflect.FileDescriptor
 
 const file_qarau_v1_fail_job_request_proto_rawDesc = "" +
 	"\n" +
-	"\x1fqarau/v1/fail_job_request.proto\x12\bqarau.v1\"L\n" +
+	"\x1fqarau/v1/fail_job_request.proto\x12\bqarau.v1\"b\n" +
 	"\x0eFailJobRequest\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\x03R\x05jobId\x12#\n" +
-	"\rerror_message\x18\x02 \x01(\tR\ferrorMessageB.Z,github.com/mxwell/qarau/gen/qarau/v1;qarauv1b\x06proto3"
+	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\x12\x14\n" +
+	"\x05final\x18\x03 \x01(\bR\x05finalB.Z,github.com/mxwell/qarau/gen/qarau/v1;qarauv1b\x06proto3"
 
 var (
 	file_qarau_v1_fail_job_request_proto_rawDescOnce sync.Once

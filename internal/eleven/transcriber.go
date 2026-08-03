@@ -15,6 +15,7 @@ import (
 
 	qarauv1 "github.com/mxwell/qarau/gen/qarau/v1"
 	"github.com/mxwell/qarau/internal/asr"
+	"github.com/mxwell/qarau/internal/audio"
 	"github.com/mxwell/qarau/internal/constants"
 	"github.com/mxwell/qarau/internal/langid"
 	"github.com/mxwell/qarau/internal/vad"
@@ -30,14 +31,13 @@ type elevenTranscriber struct {
 }
 
 const (
-	i16ToF32ConversionFactor = 32768
-	minSeconds               = 2
-	speechToTextUrl          = "https://api.elevenlabs.io/v1/speech-to-text"
-	elevenSTTModelID         = "scribe_v2"
-	fileFormat               = "pcm_s16le_16"
-	languageCode             = "kaz"
-	diarize                  = "true"
-	granularity              = "word"
+	minSeconds       = 2
+	speechToTextUrl  = "https://api.elevenlabs.io/v1/speech-to-text"
+	elevenSTTModelID = "scribe_v2"
+	fileFormat       = "pcm_s16le_16"
+	languageCode     = "kaz"
+	diarize          = "true"
+	granularity      = "word"
 )
 
 func NewElevenTranscriber(
@@ -196,21 +196,8 @@ func (t *elevenTranscriber) parseEleven(data []byte) (*qarauv1.Transcription, er
 	}, nil
 }
 
-func makeI16OfBytes(lower byte, upper byte) int16 {
-	return int16(lower) | (int16(upper) << 8)
-}
-
-func (t *elevenTranscriber) applyVad(pcm []byte) ([]speech.Segment, error) {
-	frames := len(pcm) / vad.BytesPer16bitFrame
-	if frames*vad.BytesPer16bitFrame != len(pcm) {
-		return nil, fmt.Errorf("incomplete frames in pcm: size %d", len(pcm))
-	}
-	f32Data := make([]float32, frames)
-	for i := range frames {
-		i16 := makeI16OfBytes(pcm[i*2], pcm[i*2+1])
-		f32 := float32(i16) / i16ToF32ConversionFactor
-		f32Data[i] = f32 // values are in the 0.0-1.0 range
-	}
+func (t *elevenTranscriber) applyVad(f32Data []float32) ([]speech.Segment, error) {
+	frames := len(f32Data)
 	segments, err := t.detector.Detect(f32Data)
 	if err != nil {
 		t.logger.Error("vad failed", "frames", frames, "err", err)
@@ -290,7 +277,12 @@ func (t *elevenTranscriber) Transcribe(
 		return nil, fmt.Errorf("too large audio data size: %f Bytes", pcmSize)
 	}
 
-	speechSegments, err := t.applyVad(pcm)
+	f32Data, err := audio.Convert16BitBytesToF32(pcm)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert pcm bytes to float32: %w", err)
+	}
+
+	speechSegments, err := t.applyVad(f32Data)
 	if err != nil {
 		return nil, err
 	}
@@ -322,6 +314,31 @@ func (t *elevenTranscriber) Transcribe(
 	}
 	if t.testMode {
 		printFragments(fragments)
+	}
+
+	langIdSamples, err := langid.SampleForLangID(t.logger, fragments)
+	if err != nil {
+		// XXX we can (1) skip langid, or (2) stop if no sample is collected.
+		// Choosing 'stop' to make it more noticeable for deeper investigation.
+		return nil, fmt.Errorf("sampling for langid failed: %w", err)
+	}
+
+	kazakhCount := 0
+	for sampleIndex, sample := range langIdSamples {
+		kazakh, err := t.classifier.IsKazakh(sample)
+		if err != nil {
+			t.logger.Error("langid fail", "err", err, "sampleIndex", sampleIndex)
+			return nil, fmt.Errorf("langid fail: %w", err)
+		}
+		t.logger.Info("langid sample done", "kazakh", kazakh, "sampleIndex", sampleIndex)
+		if kazakh {
+			kazakhCount++
+		}
+	}
+	t.logger.Info("langid done", "kazakhCount", kazakhCount, "samples", len(langIdSamples))
+
+	if kazakhCount == 0 {
+		return nil, asr.ErrAudioNotKazakh
 	}
 
 	stitched, err := t.stitch(fragments)

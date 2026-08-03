@@ -258,10 +258,11 @@ func (aw *ASRWorker) sendTranscription(ctx context.Context, job claimedJob, tran
 	return nil
 }
 
-func (aw *ASRWorker) failAsr(ctx context.Context, job claimedJob, errorMessage string) error {
+func (aw *ASRWorker) failAsr(ctx context.Context, job claimedJob, errorMessage string, final bool) error {
 	_, err := aw.client.FailJob(ctx, &qarauv1.FailJobRequest{
 		JobId:        job.jobID,
 		ErrorMessage: errorMessage,
+		Final:        final,
 	})
 	if err != nil {
 		aw.logger.Error("FailJob request failed", "err", err)
@@ -276,24 +277,25 @@ func (aw *ASRWorker) Process(ctx context.Context, job claimedJob) error {
 	defer cleanup()
 	if err != nil {
 		aw.logger.Error("failed to get fetched audio", "job", job.jobID, "err", err)
-		_ = aw.failAsr(ctx, job, fmt.Sprintf("audio fetch failed: %v", err))
+		_ = aw.failAsr(ctx, job, fmt.Sprintf("audio fetch failed: %v", err), false)
 		return nil // the error doesn't show up in the main loop as it's business as usual
 	}
 
 	transcription, err := aw.processAudio(ctx, job, audio)
 	if err != nil {
 		aw.logger.Error("audio processing failed", "job", job.jobID, "err", err)
-		_ = aw.failAsr(ctx, job, fmt.Sprintf("audio processing failed: %v", err))
+		final := errors.Is(err, ErrAudioNotKazakh)
+		_ = aw.failAsr(ctx, job, fmt.Sprintf("audio processing failed: %v", err), final)
 		return nil
 	}
 	if transcription == nil {
 		aw.logger.Error("nil transcription from processing", "job", job.jobID)
-		_ = aw.failAsr(ctx, job, "got empty transcription")
+		_ = aw.failAsr(ctx, job, "got empty transcription", false)
 		return nil
 	}
 	if err := aw.sendTranscription(ctx, job, transcription); err != nil {
 		aw.logger.Error("failed to send transcription", "job", job.jobID, "err", err)
-		_ = aw.failAsr(ctx, job, fmt.Sprintf("transcription sending failed: %v", err))
+		_ = aw.failAsr(ctx, job, fmt.Sprintf("transcription sending failed: %v", err), false)
 		return nil
 	}
 	aw.logger.Info("transcription sent", "job", job.jobID, "words", len(transcription.Words))

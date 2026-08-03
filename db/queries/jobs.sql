@@ -14,6 +14,7 @@ SELECT
     id,
     state,
     type,
+    last_error,
     created_at
 FROM jobs
 WHERE

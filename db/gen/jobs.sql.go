@@ -302,6 +302,7 @@ SELECT
     id,
     state,
     type,
+    last_error,
     created_at
 FROM jobs
 WHERE
@@ -312,6 +313,7 @@ type GetVideoJobsRow struct {
 	ID        int64              `json:"id"`
 	State     JobState           `json:"state"`
 	Type      JobType            `json:"type"`
+	LastError *string            `json:"last_error"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
@@ -328,6 +330,7 @@ func (q *Queries) GetVideoJobs(ctx context.Context, videoID int64) ([]GetVideoJo
 			&i.ID,
 			&i.State,
 			&i.Type,
+			&i.LastError,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err

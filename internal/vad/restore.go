@@ -4,6 +4,7 @@ import (
 	"log/slog"
 
 	qarauv1 "github.com/mxwell/qarau/gen/qarau/v1"
+	"github.com/mxwell/qarau/internal/audio"
 )
 
 const (
@@ -27,8 +28,8 @@ func RestoreWordTimestamps(
 	pos := 0
 	for i := range words {
 		word := words[i]
-		wordStart := int(word.StartMs * SampleRateKhz)
-		wordEnd := int(word.EndMs * SampleRateKhz)
+		wordStart := int(word.StartMs * audio.SampleRateKhz)
+		wordEnd := int(word.EndMs * audio.SampleRateKhz)
 		if wordEnd <= wordStart {
 			log.Warn(
 				"fixing wordEnd",
@@ -64,8 +65,8 @@ func RestoreWordTimestamps(
 		if copyStart <= wordStart && wordEnd <= copyEnd {
 			result = append(result, &qarauv1.Word{
 				Word:       word.Word,
-				StartMs:    uint32(wordStart+delta) / SampleRateKhz,
-				EndMs:      uint32(wordEnd+delta) / SampleRateKhz,
+				StartMs:    uint32(wordStart+delta) / audio.SampleRateKhz,
+				EndMs:      uint32(wordEnd+delta) / audio.SampleRateKhz,
 				Confidence: word.Confidence,
 			})
 			wordResults = append(wordResults, WordResultGood)
@@ -82,8 +83,8 @@ func RestoreWordTimestamps(
 			)
 			result = append(result, &qarauv1.Word{
 				Word:       word.Word,
-				StartMs:    uint32(wordStart+delta) / SampleRateKhz,
-				EndMs:      uint32(copyEnd+delta) / SampleRateKhz,
+				StartMs:    uint32(wordStart+delta) / audio.SampleRateKhz,
+				EndMs:      uint32(copyEnd+delta) / audio.SampleRateKhz,
 				Confidence: word.Confidence,
 			})
 			wordResults = append(wordResults, WordResultFixedEnd)
@@ -100,8 +101,8 @@ func RestoreWordTimestamps(
 			)
 			result = append(result, &qarauv1.Word{
 				Word:       word.Word,
-				StartMs:    uint32(copyStart+delta) / SampleRateKhz,
-				EndMs:      uint32(wordEnd+delta) / SampleRateKhz,
+				StartMs:    uint32(copyStart+delta) / audio.SampleRateKhz,
+				EndMs:      uint32(wordEnd+delta) / audio.SampleRateKhz,
 				Confidence: word.Confidence,
 			})
 			wordResults = append(wordResults, WordResultFixedStart)

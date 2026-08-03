@@ -13,6 +13,10 @@ import (
 	"github.com/mxwell/qarau/internal/constants"
 )
 
+var (
+	ErrAudioNotKazakh = errors.New("audio language not identified as Kazakh")
+)
+
 type Transcriber interface {
 	Transcribe(context.Context, io.Reader, int32, float64) (*qarauv1.Transcription, error)
 }

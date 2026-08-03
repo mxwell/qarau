@@ -533,7 +533,7 @@ func Test_SegmentAudioByTimestampRanges_AudioLength(t *testing.T) {
 	}
 }
 
-func Test_SegmentAudioByTimestampRanges_ErrEndOutOfRange(t *testing.T) {
+func Test_SegmentAudioByTimestampRanges_NoErrEndOutOfRange(t *testing.T) {
 	ms1 := makeSeq(0, 16*2)
 	ms2 := makeSeq(16*2, 16*2)
 	ms3 := makeSeq(32*2, 16*2)
@@ -547,7 +547,7 @@ func Test_SegmentAudioByTimestampRanges_ErrEndOutOfRange(t *testing.T) {
 	audio := slices.Concat(ms1, ms2, ms3, ms4, ms5, ms6, ms7, ms8, ms9)
 
 	speechEnds := [3]float64{0.001, 0.002, 0.003}
-	expectErrors := [3]bool{true, true, false}
+	expectErrors := [3]bool{false, false, false}
 
 	for i := range 3 {
 		_, err := SegmentAudioByTimestampRanges(
@@ -564,8 +564,8 @@ func Test_SegmentAudioByTimestampRanges_ErrEndOutOfRange(t *testing.T) {
 			120_000, // fragment max in ms
 		)
 		if expectErrors[i] {
-			if !errors.Is(err, ErrSegmentEndTimestampOutOfRange) {
-				t.Fatalf("ErrSegmentEndTimestampOutOfRange must occur: %v", err)
+			if err == nil {
+				t.Fatalf("error must occur")
 			}
 		} else {
 			if err != nil {
