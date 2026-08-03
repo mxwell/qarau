@@ -34,9 +34,6 @@ func (v *Video) ProcessingObstacle() string {
 	if !v.Embeddable {
 		return "the video can't be embedded"
 	}
-	if v.DefaultLang != "kk" {
-		return "the video language is not Kazakh"
-	}
 	if v.DurationSecs > constants.MaxDurationSecs {
 		return fmt.Sprintf(
 			"the video duration is too long: %d > %d seconds",
