@@ -3,7 +3,7 @@ package constants
 import "time"
 
 const (
-	MaxDurationSecs         = 90 * 60 // 1.5 hours
+	MaxDurationSecs         = 3 * 60 * 60 // 3 hours
 	MinLikesCount           = 20
 	MinViewsCount           = 1000
 	AsrApiDailyQuotaSeconds = 10 * 60 * 60 // 10 hours per day

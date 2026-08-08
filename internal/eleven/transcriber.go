@@ -9,9 +9,11 @@ import (
 	"io"
 	"log/slog"
 	"math"
+	"math/rand/v2"
 	"mime/multipart"
 	"net/http"
 	"strings"
+	"time"
 
 	qarauv1 "github.com/mxwell/qarau/gen/qarau/v1"
 	"github.com/mxwell/qarau/internal/asr"
@@ -20,6 +22,7 @@ import (
 	"github.com/mxwell/qarau/internal/langid"
 	"github.com/mxwell/qarau/internal/vad"
 	"github.com/streamer45/silero-vad-go/speech"
+	"golang.org/x/sync/errgroup"
 )
 
 type elevenTranscriber struct {
@@ -38,6 +41,10 @@ const (
 	languageCode     = "kaz"
 	diarize          = "true"
 	granularity      = "word"
+
+	partMinFrames      = 7 * 60 * audio.SampleRateHz // min part size is 7 minutes
+	partsMax           = 10                          // 11labs API limit is 20 concurrent jobs
+	apiRequestAttempts = 3
 )
 
 func NewElevenTranscriber(
@@ -100,33 +107,34 @@ func clamp[T Float](x T, lower T, upper T) T {
 	return x
 }
 
-func (t *elevenTranscriber) requestSTT(ctx context.Context, pcm []byte) ([]byte, error) {
+// Returns (body, retriable, error)
+func (t *elevenTranscriber) requestSTT(ctx context.Context, pcm []byte) ([]byte, bool, error) {
 	var body bytes.Buffer
 	w := multipart.NewWriter(&body)
 	if err := w.WriteField("model_id", elevenSTTModelID); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if err := w.WriteField("diarize", diarize); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if err := w.WriteField("file_format", fileFormat); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if err := w.WriteField("timestamps_granularity", granularity); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if err := w.WriteField("language_code", languageCode); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	fileWriter, err := w.CreateFormFile("file", "audio.pcm")
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if _, err = fileWriter.Write(pcm); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if err = w.Close(); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	req, err := http.NewRequestWithContext(
@@ -136,24 +144,49 @@ func (t *elevenTranscriber) requestSTT(ctx context.Context, pcm []byte) ([]byte,
 		&body,
 	)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	req.Header.Set("xi-api-key", t.apiKey)
 	req.Header.Set("Content-Type", w.FormDataContentType())
 
 	t.logger.Info("requesting STT API", "size", len(pcm))
+
+	if t.testMode {
+		if rand.Int()%10 <= 2 {
+			return nil, true, errors.New("random error")
+		} else {
+			durationMillis := len(pcm) / audio.BytesPer16bitFrame / audio.SampleRateKhz
+			midMillis := durationMillis / 2
+			endMillis := min(durationMillis, midMillis+1000)
+			wordItem := fmt.Sprintf(
+				`{ "text": "алма", "start": %.03f, "end": %.03f, "type": "word", "speaker_id": "1", "logprob": -0.1 }`,
+				float64(midMillis)/1000,
+				float64(endMillis)/1000,
+			)
+			t.logger.Info("test response word", "word", wordItem)
+			responseString := fmt.Sprintf(
+				`{ "language_code": "kk", "language_probability": 1.0, "text": "алма", "words": [%s], "transcription_id": "123", "audio_duration_secs": 1 }`,
+				wordItem,
+			)
+			return []byte(responseString), true, nil
+		}
+	}
 	response, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, true, err
 	}
 	if response == nil {
-		return nil, errors.New("nil API response")
+		return nil, true, errors.New("nil API response")
 	}
+	defer response.Body.Close()
+
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return nil, fmt.Errorf("bad status code in API response: %d", response.StatusCode)
+		retriable := response.StatusCode == 429 || response.StatusCode >= 500
+		return nil, retriable, fmt.Errorf("bad status code in API response: %d", response.StatusCode)
 	}
 
-	return io.ReadAll(response.Body)
+	bodyBytes, err := io.ReadAll(response.Body)
+	return bodyBytes, true, err
 }
 
 func (t *elevenTranscriber) parseEleven(data []byte) (*qarauv1.Transcription, error) {
@@ -196,6 +229,55 @@ func (t *elevenTranscriber) parseEleven(data []byte) (*qarauv1.Transcription, er
 	}, nil
 }
 
+func (t *elevenTranscriber) requestWithRetries(ctx context.Context, pcm []byte, attempts int) (*qarauv1.Transcription, error) {
+	var savedErr error
+	for attempt := range attempts {
+		savedErr = nil
+		responseJson, retriable, err := t.requestSTT(ctx, pcm)
+		if err != nil {
+			savedErr = err
+			t.logger.Error(
+				"STT request failed",
+				"attempt", attempt+1,
+				"attempts", attempts,
+				"err", err,
+			)
+			if retriable && attempt+1 < attempts {
+				delayMillis := time.Duration(1000*(2<<attempt) + rand.Int()%1000)
+				delay := time.Millisecond * delayMillis
+				t.logger.Info(
+					"STT request will retry",
+					"delayMillis", delay.Milliseconds(),
+				)
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case <-time.After(delay):
+				}
+				continue
+			} else {
+				break
+			}
+		}
+		parsedResponse, err := t.parseEleven(responseJson)
+		if err != nil {
+			savedErr = err
+			t.logger.Error(
+				"STT response parsing failed",
+				"attempt", attempt+1,
+				"attempts", attempts,
+				"err", err,
+			)
+			continue
+		}
+		return parsedResponse, nil
+	}
+	if savedErr != nil {
+		return nil, fmt.Errorf("STT request fail after %d attempts: %w", attempts, savedErr)
+	}
+	return nil, fmt.Errorf("STT request fail after %d attempts", attempts)
+}
+
 func (t *elevenTranscriber) applyVad(f32Data []float32) ([]speech.Segment, error) {
 	frames := len(f32Data)
 	t.detector.Reset() // detector accumulates state across runs, let's reset it
@@ -229,7 +311,6 @@ func printFragments(fragments []vad.Fragment) {
 	fmt.Println("Fragments", strings.Join(parts, "; "))
 }
 
-// TODO stitch into several parts (each under 10 minutes) if the orig audio is > 10 min
 func (t *elevenTranscriber) stitch(fragments []vad.Fragment) ([]byte, error) {
 	if len(fragments) == 0 {
 		return nil, errors.New("no fragments to stitch")
@@ -243,6 +324,118 @@ func (t *elevenTranscriber) stitch(fragments []vad.Fragment) ([]byte, error) {
 		result = append(result, fragments[i].Content...)
 	}
 	return result, nil
+}
+
+func (t *elevenTranscriber) partition(fragments []vad.Fragment) ([][]vad.Fragment, error) {
+	totalFrames := 0
+	for i := range fragments {
+		totalFrames += fragments[i].LengthInFrames()
+	}
+	if totalFrames == 0 {
+		return nil, errors.New("no content in fragments")
+	}
+	targetFrames := max(partMinFrames, totalFrames/partsMax)
+	partitions := partitionFragments(t.logger, fragments, targetFrames)
+	if partitions == nil {
+		return nil, errors.New("failed to partition fragments")
+	}
+	t.logger.Info("partitioned fragments",
+		"partitions", len(partitions),
+		"targetFrames", targetFrames,
+		"fragments", len(fragments),
+		"frames", totalFrames,
+	)
+	return partitions, nil
+}
+
+func (t *elevenTranscriber) concatWords(parts [][]*qarauv1.Word) []*qarauv1.Word {
+	n := len(parts)
+
+	wordCount := 0
+	for i := range n {
+		wordCount += len(parts[i])
+	}
+	words := make([]*qarauv1.Word, 0, wordCount)
+	for i := range n {
+		var prevStart uint32
+		if len(words) > 0 {
+			prevStart = words[len(words)-1].StartMs
+		}
+		if len(parts[i]) == 0 {
+			continue
+		}
+		curStart := parts[i][0].StartMs
+		if prevStart > curStart {
+			t.logger.Warn(
+				"word timestamps overlap in concatWords",
+				"offset", len(words),
+				"prevStart", prevStart,
+				"curStart", curStart,
+			)
+		}
+		words = append(words, parts[i]...)
+	}
+	t.logger.Info(
+		"concatenated words from parts",
+		"parts", n,
+		"wordCount", wordCount,
+	)
+	return words
+}
+
+func (t *elevenTranscriber) parallelRequest(
+	ctx context.Context,
+	fragments []vad.Fragment,
+	requestAttempts int,
+) ([]*qarauv1.Word, error) {
+	partitions, err := t.partition(fragments)
+	if err != nil {
+		return nil, fmt.Errorf("partition fail in parallelRequest: %w", err)
+	}
+
+	n := len(partitions)
+	inputs := make([][]byte, n)
+	for i := range partitions {
+		inputs[i], err = t.stitch(partitions[i])
+		if err != nil {
+			return nil, fmt.Errorf("stitch fail in parallelRequest: %w", err)
+		}
+	}
+
+	group, ctx := errgroup.WithContext(ctx)
+	group.SetLimit(partsMax)
+	results := make([][]*qarauv1.Word, n)
+	for i := range n {
+		group.Go(func() error {
+			partTranscription, err := t.requestWithRetries(ctx, inputs[i], requestAttempts)
+			if err != nil {
+				t.logger.Error(
+					"STT part processing failed",
+					"part", i,
+					"err", err,
+				)
+				return fmt.Errorf("part %d/%d failed: %w", i, n, err)
+			}
+			restoredWords := vad.RestoreWordTimestamps(
+				t.logger,
+				vad.JoinRanges(partitions[i]),
+				partTranscription.Words,
+			)
+			results[i] = restoredWords
+			t.logger.Info(
+				"STT part processed",
+				"part", i,
+				"words", len(partTranscription.Words),
+			)
+			return nil
+		})
+	}
+
+	if err := group.Wait(); err != nil {
+		return nil, err
+	}
+
+	return t.concatWords(results), nil
 }
 
 func printWords(words []*qarauv1.Word) {
@@ -342,34 +535,22 @@ func (t *elevenTranscriber) Transcribe(
 		return nil, asr.ErrAudioNotKazakh
 	}
 
-	stitched, err := t.stitch(fragments)
+	restoredWords, err := t.parallelRequest(ctx, fragments, apiRequestAttempts)
 	if err != nil {
-		t.logger.Error("stitch fail", "err", err)
-		return nil, fmt.Errorf("stitch fail: %w", err)
+		t.logger.Error(
+			"parallelRequest failed",
+			"fragments", len(fragments),
+			"err", err,
+		)
+		return nil, fmt.Errorf("transcribe fail: %w", err)
 	}
-
-	responseJson, err := t.requestSTT(ctx, stitched)
-	if err != nil {
-		return nil, err
-	}
-
-	if t.testMode {
-		fmt.Println("api response", string(responseJson))
-	}
-
-	parsedResponse, err := t.parseEleven(responseJson)
-	if err != nil {
-		return nil, err
-	}
-
-	restoredWords := vad.RestoreWordTimestamps(t.logger, vad.JoinRanges(fragments), parsedResponse.Words)
 
 	if t.testMode {
 		printWords(restoredWords)
 	}
 
 	return &qarauv1.Transcription{
-		Model: parsedResponse.Model,
+		Model: elevenSTTModelID,
 		Words: restoredWords,
 	}, nil
 }
