@@ -46,17 +46,12 @@ func NewVideoService(log *slog.Logger, queries *dbgen.Queries, ytClient *YtClien
 }
 
 const (
-	microsecondsPerSecond = 1_000_000
-	maxQueueSize          = 5
-	seqBeyondEnd          = math.MaxInt32
+	maxQueueSize = 5
+	seqBeyondEnd = math.MaxInt32
 )
 
-func microsToInt32Seconds(micros int64) int32 {
-	return int32(micros / microsecondsPerSecond)
-}
-
 func pgIntervalToInt32Seconds(interval *pgtype.Interval) int32 {
-	return microsToInt32Seconds(interval.Microseconds)
+	return MicrosToFloorInt32Seconds(interval.Microseconds)
 }
 
 func rowToVideo(row *dbgen.GetVideoRow) (*Video, error) {
@@ -122,10 +117,38 @@ func byIDRowToVideo(row *dbgen.GetVideoByIDRow) (*Video, error) {
 	}, nil
 }
 
+func (s *VideoService) updateVideo(ctx context.Context, id int64, video *Video) (*Video, error) {
+	err := s.queries.UpdateVideo(ctx, dbgen.UpdateVideoParams{
+		Title:           video.Title,
+		ChannelTitle:    video.ChannelTitle,
+		PublishedAt:     NewTimestamptz(video.PublishedAt),
+		Duration:        NewInterval(int64(video.DurationSecs)),
+		Views:           video.Views,
+		Likes:           video.Likes,
+		DefaultLang:     &video.DefaultLang,
+		Embeddable:      video.Embeddable,
+		ThumbnailUrl:    &video.ThumbnailURL,
+		ThumbnailWidth:  &video.ThumbnailWidth,
+		ThumbnailHeight: &video.ThumbnailHeight,
+		ID:              id,
+	})
+	if err != nil {
+		s.log.Error("failed to update video in DB",
+			"id", id,
+			"onlineVideoID", video.OnlineVideoID,
+			"err", err,
+		)
+		return nil, err
+	}
+	s.log.Info("updated video in DB", "onlineVideoID", video.OnlineVideoID, "ID", id)
+	video.ID = id
+	return video, nil
+}
+
 /*
  * The function returns video metadata if it's available. Also, the metadata is stored to DB.
  */
-func (s *VideoService) ProbeVideo(ctx context.Context, onlineVideoId string) (*Video, error) {
+func (s *VideoService) ProbeVideo(ctx context.Context, onlineVideoId string, force bool) (*Video, error) {
 	existing, err := s.queries.GetVideo(ctx, onlineVideoId)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
@@ -133,6 +156,19 @@ func (s *VideoService) ProbeVideo(ctx context.Context, onlineVideoId string) (*V
 			return nil, err
 		}
 	} else {
+		if force {
+			s.log.Info("force: reloading video details")
+			video, err := s.ytClient.GetVideoInformation(ctx, onlineVideoId)
+			if err != nil {
+				return nil, err
+			}
+			updatedVideo, err := s.updateVideo(ctx, existing.ID, video)
+			if err != nil {
+				return nil, err
+			}
+			return updatedVideo, nil
+		}
+
 		s.log.Info("loaded video from DB", "onlineVideoId", onlineVideoId, "id", existing.ID)
 		dbVideo, convErr := rowToVideo(&existing)
 		if convErr != nil {
@@ -145,12 +181,6 @@ func (s *VideoService) ProbeVideo(ctx context.Context, onlineVideoId string) (*V
 	if err != nil {
 		return nil, err
 	}
-	s.log.Info("loaded video information from external API", "onlineVideoId", onlineVideoId, "title", video.Title, "lang", video.DefaultLang)
-
-	duration := pgtype.Interval{
-		Microseconds: int64(video.DurationSecs) * microsecondsPerSecond,
-		Valid:        true,
-	}
 
 	// XXX one of concurrent inserts will fail with a conflict (online_video_id is UNIQUE)
 	videoID, err := s.queries.CreateVideo(ctx, dbgen.CreateVideoParams{
@@ -158,8 +188,8 @@ func (s *VideoService) ProbeVideo(ctx context.Context, onlineVideoId string) (*V
 		Title:           video.Title,
 		ChannelID:       video.ChannelID,
 		ChannelTitle:    video.ChannelTitle,
-		PublishedAt:     pgtype.Timestamptz{Time: video.PublishedAt, Valid: true},
-		Duration:        duration,
+		PublishedAt:     NewTimestamptz(video.PublishedAt),
+		Duration:        NewInterval(int64(video.DurationSecs)),
 		Views:           video.Views,
 		Likes:           video.Likes,
 		DefaultLang:     &video.DefaultLang,
@@ -355,10 +385,7 @@ func (s *VideoService) GetVideoProcess(ctx context.Context, videoID int64) (Vide
 				AsrQuota: quota,
 			}, nil
 		} else if latestJob.State == dbgen.JobStateRunning {
-			createdBefore := pgtype.Timestamptz{
-				Time:  time.Now(),
-				Valid: true,
-			}
+			createdBefore := NewTimestamptz(time.Now())
 			// This Fetch job is already running.
 			// It will need to wait for other ASR jobs once it graduates from Fetch to ASR.
 			queue, err := s.queries.GetAsrJobQueue(ctx, createdBefore)
@@ -430,10 +457,7 @@ func (s *VideoService) createVideoProcess(ctx context.Context, videoID int64) (V
 		return VideoProcess{}, ErrUnprocessableVideo
 	}
 
-	enqueued, err := s.queries.GetFetchJobQueue(ctx, pgtype.Timestamptz{
-		Time:  time.Now(),
-		Valid: true,
-	})
+	enqueued, err := s.queries.GetFetchJobQueue(ctx, NewTimestamptz(time.Now()))
 	enqueuedSize := len(enqueued)
 	if enqueuedSize >= maxQueueSize {
 		s.log.Error("max processing queue size reached", "size", enqueuedSize)
@@ -589,7 +613,7 @@ func (s *VideoService) GetDash(ctx context.Context) (DashResponse, error) {
 			JobState:          job.State,
 			OnlineVideoID:     job.OnlineVideoID,
 			Title:             job.Title,
-			VideoDurationSecs: int32(job.Duration.Microseconds / microsecondsPerSecond),
+			VideoDurationSecs: MicrosToFloorInt32Seconds(job.Duration.Microseconds),
 			CreatedAt:         job.CreatedAt.Time.Unix(),
 		})
 	}
@@ -617,7 +641,7 @@ func (s *VideoService) GetSuggestedVideos(ctx context.Context) (SuggestedVideos,
 			OnlineVideoID:   row.OnlineVideoID,
 			Title:           row.Title,
 			ChannelTitle:    row.ChannelTitle,
-			DurationSecs:    int32(row.Duration.Microseconds / microsecondsPerSecond),
+			DurationSecs:    MicrosToFloorInt32Seconds(row.Duration.Microseconds),
 			ThumbnailURL:    *row.ThumbnailUrl,
 			ThumbnailWidth:  *row.ThumbnailWidth,
 			ThumbnailHeight: *row.ThumbnailHeight,

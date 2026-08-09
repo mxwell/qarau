@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"regexp"
+	"slices"
 	"strconv"
 	"time"
 
@@ -110,6 +111,19 @@ func (c *YtClient) GetVideoInformation(ctx context.Context, onlineVideoID string
 			return nil, err
 		}
 
+		c.log.Info(
+			"loaded video details from API",
+			"onlineVideoID", onlineVideoID,
+			"stats", v.Statistics,
+			"title", v.Snippet.Title,
+			"lang", v.Snippet.DefaultLanguage,
+		)
+
+		likes := int64(v.Statistics.LikeCount)
+		if !slices.Contains(v.Statistics.NullFields, "likeCount") {
+			likes = int64(-1)
+		}
+
 		return &Video{
 			ID:              0,
 			OnlineVideoID:   onlineVideoID,
@@ -119,7 +133,7 @@ func (c *YtClient) GetVideoInformation(ctx context.Context, onlineVideoID string
 			PublishedAt:     publishedAt,
 			DurationSecs:    durationSecs,
 			Views:           int64(v.Statistics.ViewCount),
-			Likes:           int64(v.Statistics.LikeCount),
+			Likes:           likes,
 			DefaultLang:     v.Snippet.DefaultLanguage,
 			Embeddable:      v.Status.Embeddable,
 			ThumbnailURL:    thumbnail.Url,

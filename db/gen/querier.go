@@ -36,6 +36,7 @@ type Querier interface {
 	MarkJobDone(ctx context.Context, arg MarkJobDoneParams) (int64, error)
 	MarkJobFailed(ctx context.Context, arg MarkJobFailedParams) (int64, error)
 	UnlockJob(ctx context.Context, arg UnlockJobParams) (int64, error)
+	UpdateVideo(ctx context.Context, arg UpdateVideoParams) error
 	UpsertAsrQuota(ctx context.Context, arg UpsertAsrQuotaParams) (int32, error)
 	UpsertTranscription(ctx context.Context, arg UpsertTranscriptionParams) (int64, error)
 }

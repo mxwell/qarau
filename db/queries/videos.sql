@@ -69,3 +69,20 @@ INSERT INTO videos (
     sqlc.arg('thumbnail_height')
 )
 RETURNING id;
+
+-- name: UpdateVideo :exec
+UPDATE videos
+SET
+    title = sqlc.arg('title'),
+    channel_title = sqlc.arg('channel_title'),
+    published_at = sqlc.arg('published_at'),
+    duration = sqlc.arg('duration'),
+    views = sqlc.arg('views'),
+    likes = sqlc.arg('likes'),
+    default_lang = sqlc.arg('default_lang'),
+    embeddable = sqlc.arg('embeddable'),
+    thumbnail_url = sqlc.arg('thumbnail_url'),
+    thumbnail_width = sqlc.arg('thumbnail_width'),
+    thumbnail_height = sqlc.arg('thumbnail_height')
+WHERE
+    id = sqlc.arg('id');

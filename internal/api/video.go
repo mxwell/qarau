@@ -41,12 +41,14 @@ func (v *Video) ProcessingObstacle() string {
 			constants.MaxDurationSecs,
 		)
 	}
-	if v.Likes < constants.MinLikesCount {
-		return fmt.Sprintf(
-			"the video has too few likes: %d < %d",
-			v.Likes,
-			constants.MinLikesCount,
-		)
+	if v.Likes >= 0 { // -1 means the value is unknown
+		if v.Likes < constants.MinLikesCount {
+			return fmt.Sprintf(
+				"the video has too few likes: %d < %d",
+				v.Likes,
+				constants.MinLikesCount,
+			)
+		}
 	}
 	if v.Views < constants.MinViewsCount {
 		return fmt.Sprintf(

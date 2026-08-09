@@ -8,6 +8,8 @@ const (
 	MinViewsCount           = 1000
 	AsrApiDailyQuotaSeconds = 10 * 60 * 60 // 10 hours per day
 	PcmSampleRate           = 16_000
+
+	MicrosecondsPerSecond = 1_000_000
 )
 
 var (

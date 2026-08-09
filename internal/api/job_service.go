@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	dbgen "github.com/mxwell/qarau/db/gen"
 	qarauv1 "github.com/mxwell/qarau/gen/qarau/v1"
@@ -108,10 +107,7 @@ func (s *JobService) LeaseJob(ctx context.Context, workerID string, request *qar
 		}
 	}
 
-	lockedUntil := pgtype.Timestamptz{
-		Time:  time.Now().Add(lockPeriod),
-		Valid: true,
-	}
+	lockedUntil := NewTimestamptz(time.Now().Add(lockPeriod))
 	arg := dbgen.ClaimJobParams{
 		LockedBy:    &workerID,
 		LockedUntil: lockedUntil,
@@ -224,7 +220,7 @@ func (s *JobService) GetAudioBlob(ctx context.Context, videoID int64) (AudioBlob
 	return AudioBlobContent{
 		Filename:     row.Filename,
 		Content:      row.Content,
-		DurationSecs: int32(video.Duration.Microseconds / microsecondsPerSecond),
+		DurationSecs: MicrosToFloorInt32Seconds(video.Duration.Microseconds),
 	}, nil
 }
 
@@ -233,7 +229,7 @@ func (s *JobService) getVideoDuration(ctx context.Context, videoID int64) (int32
 	if err != nil {
 		return 0, err
 	}
-	return int32((video.Duration.Microseconds + microsecondsPerSecond - 1) / microsecondsPerSecond), nil
+	return MicrosToCeilInt32Seconds(video.Duration.Microseconds), nil
 }
 
 /*

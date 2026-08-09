@@ -59,7 +59,8 @@ func (h *VideoHandler) Probe(c *fiber.Ctx) error {
 		h.log.Info("invalid argument", "onlineVideoID", onlineVideoID)
 		return badRequest(c, "invalid online_video_id")
 	}
-	video, err := h.svc.ProbeVideo(c.UserContext(), onlineVideoID)
+	force := c.Query("force", "0") == "1"
+	video, err := h.svc.ProbeVideo(c.UserContext(), onlineVideoID, force)
 	if err != nil {
 		h.log.Info("video probe failed", "onlineVideoID", onlineVideoID, "err", err)
 		if errors.Is(err, ErrNoSuchVideo) {

@@ -200,3 +200,54 @@ func (q *Queries) GetVideoByID(ctx context.Context, videoID int64) (GetVideoByID
 	)
 	return i, err
 }
+
+const updateVideo = `-- name: UpdateVideo :exec
+UPDATE videos
+SET
+    title = $1,
+    channel_title = $2,
+    published_at = $3,
+    duration = $4,
+    views = $5,
+    likes = $6,
+    default_lang = $7,
+    embeddable = $8,
+    thumbnail_url = $9,
+    thumbnail_width = $10,
+    thumbnail_height = $11
+WHERE
+    id = $12
+`
+
+type UpdateVideoParams struct {
+	Title           string             `json:"title"`
+	ChannelTitle    string             `json:"channel_title"`
+	PublishedAt     pgtype.Timestamptz `json:"published_at"`
+	Duration        pgtype.Interval    `json:"duration"`
+	Views           int64              `json:"views"`
+	Likes           int64              `json:"likes"`
+	DefaultLang     *string            `json:"default_lang"`
+	Embeddable      bool               `json:"embeddable"`
+	ThumbnailUrl    *string            `json:"thumbnail_url"`
+	ThumbnailWidth  *int32             `json:"thumbnail_width"`
+	ThumbnailHeight *int32             `json:"thumbnail_height"`
+	ID              int64              `json:"id"`
+}
+
+func (q *Queries) UpdateVideo(ctx context.Context, arg UpdateVideoParams) error {
+	_, err := q.db.Exec(ctx, updateVideo,
+		arg.Title,
+		arg.ChannelTitle,
+		arg.PublishedAt,
+		arg.Duration,
+		arg.Views,
+		arg.Likes,
+		arg.DefaultLang,
+		arg.Embeddable,
+		arg.ThumbnailUrl,
+		arg.ThumbnailWidth,
+		arg.ThumbnailHeight,
+		arg.ID,
+	)
+	return err
+}
