@@ -33,9 +33,12 @@ type Querier interface {
 	GetVideoJobs(ctx context.Context, videoID int64) ([]GetVideoJobsRow, error)
 	GetWords(ctx context.Context, arg GetWordsParams) ([]Word, error)
 	InsertWords(ctx context.Context, arg []InsertWordsParams) (int64, error)
+	ListPlaylists(ctx context.Context, arg ListPlaylistsParams) ([]Playlist, error)
 	MarkJobDone(ctx context.Context, arg MarkJobDoneParams) (int64, error)
 	MarkJobFailed(ctx context.Context, arg MarkJobFailedParams) (int64, error)
 	UnlockJob(ctx context.Context, arg UnlockJobParams) (int64, error)
+	UpdatePlaylistDetails(ctx context.Context, arg UpdatePlaylistDetailsParams) error
+	UpdatePlaylistWithError(ctx context.Context, arg UpdatePlaylistWithErrorParams) error
 	UpdateVideo(ctx context.Context, arg UpdateVideoParams) error
 	UpsertAsrQuota(ctx context.Context, arg UpsertAsrQuotaParams) (int32, error)
 	UpsertTranscription(ctx context.Context, arg UpsertTranscriptionParams) (int64, error)

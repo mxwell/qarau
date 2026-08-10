@@ -126,6 +126,18 @@ type Job struct {
 	FinishedAt      pgtype.Timestamptz `json:"finished_at"`
 }
 
+type Playlist struct {
+	ID               int64              `json:"id"`
+	OnlinePlaylistID string             `json:"online_playlist_id"`
+	Error            *string            `json:"error"`
+	Title            string             `json:"title"`
+	ItemCount        int32              `json:"item_count"`
+	ThumbnailUrl     string             `json:"thumbnail_url"`
+	ThumbnailWidth   int32              `json:"thumbnail_width"`
+	ThumbnailHeight  int32              `json:"thumbnail_height"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
 type Transcription struct {
 	ID        int64              `json:"id"`
 	VideoID   int64              `json:"video_id"`

@@ -274,6 +274,11 @@ type SuggestedVideos struct {
 	Videos []SuggestedVideo `json:"videos"`
 }
 
+type SuggestedPlaylists struct {
+	Playlists  []Playlist `json:"playlists"`
+	NextCursor *int64     `json:"next_cursor,omitempty"`
+}
+
 /**
  * Just take an item with the largest job ID
  */
@@ -650,5 +655,117 @@ func (s *VideoService) GetSuggestedVideos(ctx context.Context) (SuggestedVideos,
 
 	return SuggestedVideos{
 		Videos: videos,
+	}, nil
+}
+
+func (s *VideoService) GetSuggestedPlaylists(ctx context.Context, cursor *int64, pageSize int32) (SuggestedPlaylists, error) {
+	rowsWithExtra, err := s.queries.ListPlaylists(ctx, dbgen.ListPlaylistsParams{
+		Cursor:   cursor,
+		PageSize: pageSize + 1,
+	})
+	if err != nil {
+		return SuggestedPlaylists{}, fmt.Errorf("failed to load suggested playlists from DB: %w", err)
+	}
+	rows := rowsWithExtra
+	var nextCursor *int64
+	if len(rowsWithExtra) > int(pageSize) {
+		rows = rowsWithExtra[:pageSize]
+		lastID := rows[len(rows)-1].ID
+		nextCursor = &lastID
+	}
+
+	toLoadFromApi := make([]string, 0)
+	idsToLoadFromApi := make([]int64, 0)
+	for _, row := range rows {
+		if row.Title != "" {
+			continue
+		}
+		toLoadFromApi = append(toLoadFromApi, row.OnlinePlaylistID)
+		idsToLoadFromApi = append(idsToLoadFromApi, row.ID)
+	}
+
+	loads := make(map[string]PlaylistLoad)
+
+	if len(toLoadFromApi) > 0 {
+		s.log.Info("loading playlist details from API", "playlists", len(toLoadFromApi))
+		loads, err = s.ytClient.LoadPlaylists(ctx, toLoadFromApi)
+		if err != nil {
+			return SuggestedPlaylists{}, fmt.Errorf("failed to load suggested playlist details from API: %w", err)
+		}
+		updatedDetails := 0
+		updatedWithError := 0
+		for i, onlinePlaylistID := range toLoadFromApi {
+			id := idsToLoadFromApi[i]
+			load := loads[onlinePlaylistID]
+			playlist := load.playlist
+			if playlist != nil {
+				err = s.queries.UpdatePlaylistDetails(ctx, dbgen.UpdatePlaylistDetailsParams{
+					Title:           playlist.Title,
+					ItemCount:       playlist.ItemCount,
+					ThumbnailUrl:    playlist.ThumbnailURL,
+					ThumbnailWidth:  playlist.ThumbnailWidth,
+					ThumbnailHeight: playlist.ThumbnailHeight,
+					ID:              id,
+				})
+				if err != nil {
+					return SuggestedPlaylists{}, fmt.Errorf(
+						"failed to update playlist details in DB: %w",
+						err,
+					)
+				}
+				updatedDetails += 1
+			} else {
+				errMessage := load.errMsg
+				if errMessage == "" {
+					errMessage = "unknown error"
+				}
+				err = s.queries.UpdatePlaylistWithError(ctx, dbgen.UpdatePlaylistWithErrorParams{
+					Error: &errMessage,
+					ID:    id,
+				})
+				if err != nil {
+					return SuggestedPlaylists{}, fmt.Errorf(
+						"failed to update playlist with error '%s' in DB: %w",
+						errMessage,
+						err,
+					)
+				}
+				updatedWithError += 1
+			}
+		}
+		s.log.Info("updated playlists in DB", "updatedDetails", updatedDetails, "updatedWithError", updatedWithError)
+	}
+
+	results := make([]Playlist, 0, len(rows))
+	for _, row := range rows {
+		onlinePlaylistID := row.OnlinePlaylistID
+		if row.Title != "" {
+			results = append(results, Playlist{
+				OnlinePlaylistID: onlinePlaylistID,
+				Title:            row.Title,
+				ThumbnailURL:     row.ThumbnailUrl,
+				ThumbnailWidth:   row.ThumbnailWidth,
+				ThumbnailHeight:  row.ThumbnailHeight,
+				ItemCount:        row.ItemCount,
+			})
+			continue
+		}
+		load := loads[onlinePlaylistID]
+		playlist := load.playlist
+		if playlist != nil {
+			results = append(results, *playlist)
+		} else {
+			s.log.Warn(
+				"skipping playlist with error from API",
+				"onlinePlaylistID", onlinePlaylistID,
+				"error", load.errMsg,
+			)
+			continue
+		}
+	}
+
+	return SuggestedPlaylists{
+		Playlists:  results,
+		NextCursor: nextCursor,
 	}, nil
 }

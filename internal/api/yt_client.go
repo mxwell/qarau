@@ -145,3 +145,61 @@ func (c *YtClient) GetVideoInformation(ctx context.Context, onlineVideoID string
 
 	return nil, ErrNoSuchVideo
 }
+
+type PlaylistLoad struct {
+	playlist *Playlist
+	errMsg   string
+}
+
+func (c *YtClient) LoadPlaylists(ctx context.Context, onlinePlaylistIDs []string) (map[string]PlaylistLoad, error) {
+	response, err := c.svc.Playlists.
+		List([]string{"contentDetails", "snippet"}).
+		Id(onlinePlaylistIDs...).
+		MaxResults(50).
+		Context(ctx).
+		Do()
+
+	if err != nil {
+		c.log.Error("failed to fetch playlists from YouTube API", "err", err)
+		return nil, fmt.Errorf("%w: %w", ErrYtApiFail, err)
+	}
+
+	results := make(map[string]PlaylistLoad)
+	for _, v := range response.Items {
+		thumbnail, err := c.pickThumbnail(v.Snippet.Thumbnails)
+		if err != nil {
+			results[v.Id] = PlaylistLoad{
+				errMsg: "can't pick thumbnail: " + err.Error(),
+			}
+			continue
+		}
+		if v.Snippet.Title == "" {
+			results[v.Id] = PlaylistLoad{
+				errMsg: "empty playlist title not supported",
+			}
+			continue
+		}
+
+		results[v.Id] = PlaylistLoad{
+			playlist: &Playlist{
+				OnlinePlaylistID: v.Id,
+				Title:            v.Snippet.Title,
+				ThumbnailURL:     thumbnail.Url,
+				ThumbnailWidth:   int32(thumbnail.Width),
+				ThumbnailHeight:  int32(thumbnail.Height),
+				ItemCount:        int32(v.ContentDetails.ItemCount),
+			},
+		}
+	}
+
+	for _, onlinePlaylistId := range onlinePlaylistIDs {
+		_, ok := results[onlinePlaylistId]
+		if !ok {
+			results[onlinePlaylistId] = PlaylistLoad{
+				errMsg: "playlist not found",
+			}
+		}
+	}
+
+	return results, nil
+}
