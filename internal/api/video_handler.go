@@ -277,7 +277,7 @@ func (h *VideoHandler) Dash(c *fiber.Ctx) error {
 		h.log.Error("failed to get data for /dash", "err", err)
 		return internalError(c, "internal error")
 	}
-	return c.JSON(response)
+	return c.JSON(response, fiber.MIMEApplicationJSONCharsetUTF8)
 }
 
 func (h *VideoHandler) SuggestedVideos(c *fiber.Ctx) error {
