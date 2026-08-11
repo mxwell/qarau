@@ -203,3 +203,104 @@ func (c *YtClient) LoadPlaylists(ctx context.Context, onlinePlaylistIDs []string
 
 	return results, nil
 }
+
+const playlistItemPageSize = 10
+
+type PlaylistItem struct {
+	OnlineVideoID   string    `json:"online_video_id"`
+	Title           string    `json:"title"`
+	ChannelTitle    string    `json:"channel_title"`
+	PublishedAt     time.Time `json:"published_at"`
+	ThumbnailURL    string    `json:"thumbnail_url"`
+	ThumbnailWidth  int32     `json:"thumbnail_width"`
+	ThumbnailHeight int32     `json:"thumbnail_height"`
+}
+
+type PlaylistPage struct {
+	Items         []PlaylistItem
+	PrevPageToken *string
+	NextPageToken *string
+}
+
+func (c *YtClient) convertPlaylistItems(responseItems []*yt.PlaylistItem) ([]PlaylistItem, error) {
+	items := make([]PlaylistItem, 0, len(responseItems))
+	for i, item := range responseItems {
+		publishedAt, err := time.Parse(time.RFC3339, item.ContentDetails.VideoPublishedAt)
+		if err != nil {
+			c.log.Error(
+				"failed to parse PublishedAt in PlaylistItem",
+				"err", err,
+				"PublishedAt", item.ContentDetails.VideoPublishedAt,
+				"i", i,
+			)
+			continue
+		}
+
+		thumbnail, err := c.pickThumbnail(item.Snippet.Thumbnails)
+		if err != nil {
+			c.log.Error(
+				"failed to pick thumbnail in PlaylistItem",
+				"err", err,
+				"i", i,
+			)
+			continue
+		}
+
+		items = append(items, PlaylistItem{
+			OnlineVideoID:   item.ContentDetails.VideoId,
+			Title:           item.Snippet.Title,
+			ChannelTitle:    item.Snippet.ChannelTitle,
+			PublishedAt:     publishedAt,
+			ThumbnailURL:    thumbnail.Url,
+			ThumbnailWidth:  int32(thumbnail.Width),
+			ThumbnailHeight: int32(thumbnail.Height),
+		})
+	}
+
+	if len(items) == 0 {
+		c.log.Error("no playlist items passed converstion")
+		return nil, ErrResponseParseFail
+	}
+
+	return items, nil
+}
+
+func (c *YtClient) LoadPlaylistPage(
+	ctx context.Context,
+	onlinePlaylistID, pageToken string,
+) (PlaylistPage, error) {
+	request := c.svc.PlaylistItems.
+		List([]string{"contentDetails", "snippet"}).
+		Context(ctx).
+		PlaylistId(onlinePlaylistID).
+		MaxResults(playlistItemPageSize)
+	if pageToken != "" {
+		request.PageToken(pageToken)
+	}
+	response, err := request.Do()
+	if err != nil {
+		c.log.Error("failed to fetch playlist page from YouTube API", "err", err)
+		return PlaylistPage{}, fmt.Errorf("%w: %w", ErrYtApiFail, err)
+	}
+
+	items, err := c.convertPlaylistItems(response.Items)
+	if err != nil {
+		return PlaylistPage{}, err
+	}
+
+	var prevPageToken, nextPageToken *string
+	if response.PrevPageToken != "" {
+		s := response.PrevPageToken
+		prevPageToken = &s
+	}
+	if response.NextPageToken != "" {
+		s := response.NextPageToken
+		nextPageToken = &s
+	}
+
+	return PlaylistPage{
+		Items:         items,
+		PrevPageToken: prevPageToken,
+		NextPageToken: nextPageToken,
+	}, nil
+}

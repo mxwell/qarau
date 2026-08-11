@@ -14,7 +14,9 @@ import (
 
 var (
 	onlineVideoIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
-	errInvalidParam      = errors.New("invalid param")
+	// alternative for playlists: ^(PL|UU|OL|FL|LL)[A-Za-z0-9_-]{10,40}$
+	onlinePlaylistIDPattern = regexp.MustCompile(`^PL[A-Za-z0-9_-]{32}$`)
+	errInvalidParam         = errors.New("invalid param")
 )
 
 type VideoHandler struct {
@@ -38,6 +40,7 @@ func NewVideoHandler(log *slog.Logger, svc *VideoService) (*VideoHandler, error)
 func (h *VideoHandler) Register(r fiber.Router) {
 	r.Get("/suggested_videos", h.SuggestedVideos)
 	r.Get("/suggested_playlists", h.SuggestedPlaylists)
+	r.Get("/playlist/:online_playlist_id", h.Playlist)
 	r.Get("/probe/:online_video_id", h.Probe)
 	r.Post("/fetch/:video_id", h.Fetch)
 	r.Get("/subtitles/:transcription_id", h.Subtitles)
@@ -54,20 +57,19 @@ type ProbedVideoResponse struct {
 	Transcriptions     []TranscriptionInfo `json:"transcriptions"`
 }
 
-func (h *VideoHandler) Probe(c *fiber.Ctx) error {
-	onlineVideoID := c.Params("online_video_id")
-	if !onlineVideoIDPattern.MatchString(onlineVideoID) {
-		h.log.Info("invalid argument", "onlineVideoID", onlineVideoID)
-		return badRequest(c, "invalid online_video_id")
-	}
-	force := c.Query("force", "0") == "1"
+type PlaylistPageResponse struct {
+	Items         []PlaylistItem       `json:"items"`
+	CurVideo      *ProbedVideoResponse `json:"cur_video,omitempty"`
+	VideoInPage   bool                 `json:"video_in_page"`
+	PrevPageToken *string              `json:"prev_page_token,omitempty"`
+	NextPageToken *string              `json:"next_page_token,omitempty"`
+}
+
+func (h *VideoHandler) probeVideo(c *fiber.Ctx, onlineVideoID string, force bool) (ProbedVideoResponse, error) {
 	video, err := h.svc.ProbeVideo(c.UserContext(), onlineVideoID, force)
 	if err != nil {
 		h.log.Info("video probe failed", "onlineVideoID", onlineVideoID, "err", err)
-		if errors.Is(err, ErrNoSuchVideo) {
-			return notFound(c, err.Error())
-		}
-		return internalError(c, "internal error while probing video")
+		return ProbedVideoResponse{}, err
 	}
 
 	videoProcess := VideoProcess{
@@ -78,16 +80,17 @@ func (h *VideoHandler) Probe(c *fiber.Ctx) error {
 		videoProcess, err = h.svc.GetVideoProcess(c.UserContext(), video.ID)
 		if err != nil {
 			h.log.Error("failed to load process video state", "onlineVideoID", onlineVideoID, "err", err)
-			return internalError(c, "internal error while checking processing state")
+			return ProbedVideoResponse{}, err
 		}
 
 		transcriptions, err = h.svc.GetTranscriptions(c.UserContext(), video.ID)
 		if err != nil {
-			return internalError(c, "internal error while loading transcriptions")
+			h.log.Error("failed to load transcription for probed video", "video", video.ID, "err", err)
+			return ProbedVideoResponse{}, err
 		}
 		if videoProcess.State == ProcessingStateDone && len(transcriptions) == 0 {
 			h.log.Error("no transcriptions for ProcessingStateDone", "videoID", video.ID)
-			return internalError(c, "corrupted data")
+			return ProbedVideoResponse{}, ErrCorruptedData
 		}
 	}
 
@@ -100,6 +103,25 @@ func (h *VideoHandler) Probe(c *fiber.Ctx) error {
 		Process:            videoProcess,
 		Transcriptions:     transcriptions,
 	}
+	return response, nil
+}
+
+func (h *VideoHandler) Probe(c *fiber.Ctx) error {
+	onlineVideoID := c.Params("online_video_id")
+	if !onlineVideoIDPattern.MatchString(onlineVideoID) {
+		h.log.Info("invalid argument", "onlineVideoID", onlineVideoID)
+		return badRequest(c, "invalid online_video_id")
+	}
+	force := c.Query("force", "0") == "1"
+
+	response, err := h.probeVideo(c, onlineVideoID, force)
+	if err != nil {
+		if errors.Is(err, ErrNoSuchVideo) {
+			return notFound(c, err.Error())
+		}
+		return internalError(c, "internal error while probing video")
+	}
+
 	return c.JSON(response)
 }
 
@@ -282,6 +304,60 @@ func (h *VideoHandler) SuggestedPlaylists(c *fiber.Ctx) error {
 		h.log.Error("failed to load suggested playlists", "err", err)
 		return internalError(c, "internal error")
 	}
+	return c.JSON(response)
+}
+
+// The function loads a playlist page from YouTube Data API.
+// The page can be specified with a page token, otherwise the first page is loaded.
+// Video probe can be requested with the param `v` (for video ID).
+// Common use case: the user watches a video with a playlist in sidebar.
+// The flag `video_in_page` indicates whether the video is found in the particular page.
+func (h *VideoHandler) Playlist(c *fiber.Ctx) error {
+	onlinePlaylistID := c.Params("online_playlist_id")
+	if !onlinePlaylistIDPattern.MatchString(onlinePlaylistID) {
+		h.log.Info("invalid online_playlist_id in Playlist call", "onlinePlaylistID", onlinePlaylistID)
+		return badRequest(c, "invalid playlist ID")
+	}
+	v := c.Query("v")
+	if v != "" && !onlineVideoIDPattern.MatchString(v) {
+		h.log.Info("invalid v in Playlist call", "v", v, "onlinePlaylistID", onlinePlaylistID)
+		return badRequest(c, "invalid v")
+	}
+	pageToken := c.Query("page")
+
+	pageLoad, err := h.svc.PlaylistPage(
+		c.UserContext(),
+		onlinePlaylistID,
+		pageToken,
+	)
+	if err != nil {
+		h.log.Error("PlaylistPage failed", "list", onlinePlaylistID, "page", pageToken, "err", err)
+		return internalError(c, "playlist load error")
+	}
+
+	response := PlaylistPageResponse{
+		Items:         pageLoad.Items,
+		CurVideo:      nil,
+		PrevPageToken: pageLoad.PrevPageToken,
+		NextPageToken: pageLoad.NextPageToken,
+	}
+
+	if v != "" {
+		for _, item := range pageLoad.Items {
+			if item.OnlineVideoID == v {
+				response.VideoInPage = true
+				break
+			}
+		}
+
+		curVideo, err := h.probeVideo(c, v, false /* force */)
+		if err != nil {
+			h.log.Error("video probe failed", "video", v, "err", err)
+			return internalError(c, "video probe error")
+		}
+		response.CurVideo = &curVideo
+	}
+
 	return c.JSON(response)
 }
 

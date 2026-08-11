@@ -769,3 +769,20 @@ func (s *VideoService) GetSuggestedPlaylists(ctx context.Context, cursor *int64,
 		NextCursor: nextCursor,
 	}, nil
 }
+
+func (s *VideoService) PlaylistPage(
+	ctx context.Context,
+	onlinePlaylistID, pageToken string,
+) (PlaylistPage, error) {
+	page, err := s.ytClient.LoadPlaylistPage(ctx, onlinePlaylistID, pageToken)
+	if err != nil {
+		s.log.Error(
+			"failed to load playlist page",
+			"list", onlinePlaylistID,
+			"pageToken", pageToken,
+			"err", err,
+		)
+		return PlaylistPage{}, fmt.Errorf("failed to load playlist page: %w", err)
+	}
+	return page, nil
+}
