@@ -13,9 +13,8 @@ import (
 )
 
 var (
-	onlineVideoIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
-	// alternative for playlists: ^(PL|UU|OL|FL|LL)[A-Za-z0-9_-]{10,40}$
-	onlinePlaylistIDPattern = regexp.MustCompile(`^PL[A-Za-z0-9_-]{32}$`)
+	onlineVideoIDPattern    = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
+	onlinePlaylistIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{10,40}$`)
 	errInvalidParam         = errors.New("invalid param")
 )
 
