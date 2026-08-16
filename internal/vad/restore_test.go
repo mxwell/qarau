@@ -79,6 +79,7 @@ func Test_RestoreWordTimestamps_OneMatch(t *testing.T) {
 			StartMs:    1100,
 			EndMs:      1200,
 			Confidence: 100,
+			Speaker:    11,
 		},
 	}
 
@@ -92,6 +93,9 @@ func Test_RestoreWordTimestamps_OneMatch(t *testing.T) {
 	}
 	if rw.EndMs != 2200 {
 		t.Fatalf("result word end is %d instead of %d", rw.EndMs, 2200)
+	}
+	if rw.Speaker != 11 {
+		t.Fatalf("result word speaker id is %d instead of %d", rw.Speaker, 11)
 	}
 }
 

@@ -68,6 +68,7 @@ func RestoreWordTimestamps(
 				StartMs:    uint32(wordStart+delta) / audio.SampleRateKhz,
 				EndMs:      uint32(wordEnd+delta) / audio.SampleRateKhz,
 				Confidence: word.Confidence,
+				Speaker:    word.Speaker,
 			})
 			wordResults = append(wordResults, WordResultGood)
 		} else if copyStart <= wordStart && wordStart < copyEnd {
@@ -86,6 +87,7 @@ func RestoreWordTimestamps(
 				StartMs:    uint32(wordStart+delta) / audio.SampleRateKhz,
 				EndMs:      uint32(copyEnd+delta) / audio.SampleRateKhz,
 				Confidence: word.Confidence,
+				Speaker:    word.Speaker,
 			})
 			wordResults = append(wordResults, WordResultFixedEnd)
 		} else if copyStart < wordEnd && wordEnd <= copyEnd {
@@ -104,6 +106,7 @@ func RestoreWordTimestamps(
 				StartMs:    uint32(copyStart+delta) / audio.SampleRateKhz,
 				EndMs:      uint32(wordEnd+delta) / audio.SampleRateKhz,
 				Confidence: word.Confidence,
+				Speaker:    word.Speaker,
 			})
 			wordResults = append(wordResults, WordResultFixedStart)
 		} else {
