@@ -23,6 +23,7 @@ type APIConfig struct {
 	AdminToken  string
 	LogDir      string
 	LogLevel    slog.Level
+	SentryDSN   string
 }
 
 func LoadAPI() (APIConfig, error) {
@@ -63,6 +64,7 @@ func LoadAPI() (APIConfig, error) {
 		AdminToken:  v.GetString("ADMIN_TOKEN"),
 		LogDir:      v.GetString("LOG_DIR"),
 		LogLevel:    logLevel,
+		SentryDSN:   v.GetString("SENTRY_DSN"),
 	}
 
 	if cfg.GRPCPort < 1024 {

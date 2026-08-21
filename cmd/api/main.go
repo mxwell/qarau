@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/getsentry/sentry-go"
+	sentryfiber "github.com/getsentry/sentry-go/fiber"
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 	dbgen "github.com/mxwell/qarau/db/gen"
@@ -40,6 +42,16 @@ func run() error {
 		return fmt.Errorf("failed to init logger: %w", err)
 	}
 	defer logCloser.Close()
+
+	if cfg.SentryDSN != "" {
+		err = sentry.Init(sentry.ClientOptions{Dsn: cfg.SentryDSN})
+		if err != nil {
+			logger.Error("sentry init fail", "err", err)
+			return fmt.Errorf("sentry init fail: %w", err)
+		}
+		logger.Info("sentry init ok")
+	}
+
 	logger.Info("api starting")
 
 	db, err := pgxpool.New(ctx, cfg.DBUrl)
@@ -97,10 +109,17 @@ func run() error {
 	)
 
 	// Fiber app
+	sentryHandler := sentryfiber.New(sentryfiber.Options{
+		Repanic:         true,
+		WaitForDelivery: true,
+	})
 	app := fiber.New(fiber.Config{
 		DisableStartupMessage: true,
 	})
-	app.Use(logging.FiberRequestLogger(logger))
+	app.Use(
+		sentryHandler,
+		logging.FiberRequestLogger(logger),
+	)
 
 	ytClient, err := api.NewYtClient(ctx, logger, cfg.YTApiKey)
 	if err != nil {
