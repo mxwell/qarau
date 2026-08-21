@@ -95,7 +95,10 @@ func run() error {
 		Certificates: []tls.Certificate{certificate},
 		ClientCAs:    caPool,
 	}
-	grpcServer := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsConfig)))
+	grpcServer := grpc.NewServer(
+		grpc.UnaryInterceptor(api.GrpcUnarySentryInterceptor),
+		grpc.Creds(credentials.NewTLS(tlsConfig)),
+	)
 
 	queries := dbgen.New(db)
 	jobService, err := api.NewService(logger, queries, db)
