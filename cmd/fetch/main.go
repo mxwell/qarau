@@ -28,7 +28,7 @@ func run() error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	logger, logCloser, err := logging.NewDailyWriter(cfg.LogDir, "fetch", cfg.LogLevel)
+	logger, logCloser, err := logging.NewDailyWriter(cfg.LogDir, "fetch", cfg.LogLevel, nil)
 	if err != nil {
 		return fmt.Errorf("failed to init logger: %w", err)
 	}

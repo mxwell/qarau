@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"os/signal"
@@ -37,22 +38,33 @@ func run() error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	logger, logCloser, err := logging.NewDailyWriter(cfg.LogDir, "api", cfg.LogLevel)
+	var altHandler slog.Handler
+	sentryInitialized := false
+	if cfg.SentryDSN != "" {
+		err = sentry.Init(sentry.ClientOptions{Dsn: cfg.SentryDSN})
+		if err != nil {
+			return fmt.Errorf("sentry init fail: %w", err)
+		}
+		defer sentry.Flush(2 * time.Second)
+		altHandler = logging.NewSentryIssueHandler()
+		sentryInitialized = true
+	}
+
+	logger, logCloser, err := logging.NewDailyWriter(
+		cfg.LogDir,
+		"api",
+		cfg.LogLevel,
+		altHandler,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to init logger: %w", err)
 	}
 	defer logCloser.Close()
 
-	if cfg.SentryDSN != "" {
-		err = sentry.Init(sentry.ClientOptions{Dsn: cfg.SentryDSN})
-		if err != nil {
-			logger.Error("sentry init fail", "err", err)
-			return fmt.Errorf("sentry init fail: %w", err)
-		}
-		logger.Info("sentry init ok")
-	}
-
 	logger.Info("api starting")
+	if sentryInitialized {
+		logger.Info("sentry initialized")
+	}
 
 	db, err := pgxpool.New(ctx, cfg.DBUrl)
 	if err != nil {

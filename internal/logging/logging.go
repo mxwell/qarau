@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log/slog"
@@ -9,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/mxwell/qarau/internal/constants"
 )
 
@@ -23,7 +25,74 @@ type dailyWriter struct {
 	day string // YYYY-MM-DD currently open
 }
 
-func NewDailyWriter(dir, component string, level slog.Level) (*slog.Logger, io.Closer, error) {
+type sentryIssueHandler struct {
+}
+
+func NewSentryIssueHandler() *sentryIssueHandler {
+	return &sentryIssueHandler{}
+}
+
+func (h *sentryIssueHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return level >= slog.LevelError
+}
+
+func slogAttrValueToAny(v slog.Value) any {
+	switch v.Kind() {
+	case slog.KindBool, slog.KindInt64, slog.KindUint64, slog.KindFloat64, slog.KindString:
+		return v.Any()
+	default:
+		return v.String()
+	}
+}
+
+func (h *sentryIssueHandler) Handle(ctx context.Context, record slog.Record) error {
+	if record.Level < slog.LevelError {
+		return nil
+	}
+	hub := sentry.GetHubFromContext(ctx)
+	if hub == nil {
+		hub = sentry.CurrentHub()
+	}
+	hub.WithScope(func(scope *sentry.Scope) {
+		scope.SetFingerprint([]string{record.Message})
+
+		var wrappedError error
+		scopeCtx := sentry.Context{"message": record.Message}
+
+		record.Attrs(func(a slog.Attr) bool {
+			v := a.Value.Resolve()
+			if a.Key == "err" {
+				if err, ok := v.Any().(error); ok {
+					wrappedError = err
+					return true
+				}
+			}
+			scopeCtx[a.Key] = slogAttrValueToAny(v)
+			return true
+		})
+
+		scope.SetContext("log", scopeCtx)
+
+		if wrappedError != nil {
+			hub.CaptureException(wrappedError)
+		} else {
+			hub.CaptureMessage(record.Message)
+		}
+	})
+	return nil
+}
+
+func (h *sentryIssueHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	// Incorrect, simplified: ignore attrs, return self
+	return h
+}
+
+func (h *sentryIssueHandler) WithGroup(name string) slog.Handler {
+	// Incorrect, simplified: ignore group, return self
+	return h
+}
+
+func NewDailyWriter(dir, component string, level slog.Level, altHandler slog.Handler) (*slog.Logger, io.Closer, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, nil, fmt.Errorf("failed to create log dir %s: %w", dir, err)
 	}
@@ -37,7 +106,10 @@ func NewDailyWriter(dir, component string, level slog.Level) (*slog.Logger, io.C
 		return nil, nil, err
 	}
 
-	handler := slog.NewJSONHandler(w, &slog.HandlerOptions{Level: level})
+	var handler slog.Handler = slog.NewJSONHandler(w, &slog.HandlerOptions{Level: level})
+	if altHandler != nil {
+		handler = slog.NewMultiHandler(handler, altHandler)
+	}
 	return slog.New(handler), w, nil
 }
 

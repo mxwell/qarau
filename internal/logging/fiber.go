@@ -25,7 +25,7 @@ func FiberRequestLogger(log *slog.Logger) fiber.Handler {
 			"bytes", len(c.Response().Body()),
 		}
 		if err != nil {
-			attrs = append(attrs, "err", err.Error())
+			attrs = append(attrs, "err", err)
 		}
 
 		switch {
