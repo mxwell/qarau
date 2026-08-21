@@ -297,6 +297,56 @@ func (q *Queries) GetLast24hJobs(ctx context.Context) ([]GetLast24hJobsRow, erro
 	return items, nil
 }
 
+const getLastJobs = `-- name: GetLastJobs :many
+SELECT
+    jt.type,
+    jt.state,
+    vt.online_video_id,
+    vt.title,
+    vt.duration,
+    jt.created_at
+FROM jobs AS jt
+JOIN videos AS vt ON jt.video_id = vt.id
+ORDER BY jt.created_at DESC
+LIMIT $1
+`
+
+type GetLastJobsRow struct {
+	Type          JobType            `json:"type"`
+	State         JobState           `json:"state"`
+	OnlineVideoID string             `json:"online_video_id"`
+	Title         string             `json:"title"`
+	Duration      pgtype.Interval    `json:"duration"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) GetLastJobs(ctx context.Context, jobs int32) ([]GetLastJobsRow, error) {
+	rows, err := q.db.Query(ctx, getLastJobs, jobs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetLastJobsRow
+	for rows.Next() {
+		var i GetLastJobsRow
+		if err := rows.Scan(
+			&i.Type,
+			&i.State,
+			&i.OnlineVideoID,
+			&i.Title,
+			&i.Duration,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getVideoJobs = `-- name: GetVideoJobs :many
 SELECT
     id,

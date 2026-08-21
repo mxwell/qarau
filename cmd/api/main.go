@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	dbgen "github.com/mxwell/qarau/db/gen"
 	qarauv1 "github.com/mxwell/qarau/gen/qarau/v1"
+	"github.com/mxwell/qarau/internal/admin"
 	"github.com/mxwell/qarau/internal/api"
 	"github.com/mxwell/qarau/internal/config"
 	"github.com/mxwell/qarau/internal/logging"
@@ -119,6 +120,26 @@ func run() error {
 
 	apiRouter := app.Group("/qarauapi/v1")
 	videoHandler.Register(apiRouter)
+
+	if adminToken := cfg.AdminToken; adminToken != "" {
+		adminService, err := admin.NewAdminService(logger, queries)
+		if err != nil {
+			logger.Error("failed to create AdminService", "err", err)
+			return err
+		}
+
+		adminHandler, err := admin.NewAdminHandler(logger, adminService)
+		if err != nil {
+			logger.Error("failed to create AdminHandler")
+			return err
+		}
+
+		adminRouter := app.Group(
+			"/qarauadmin/api/v1",
+			admin.AdminAuth(adminToken),
+		)
+		adminHandler.Register(adminRouter)
+	}
 
 	group, groupCtx := errgroup.WithContext(ctx)
 

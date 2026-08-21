@@ -20,6 +20,7 @@ type APIConfig struct {
 	GracePeriod time.Duration
 	DBUrl       string
 	YTApiKey    string
+	AdminToken  string
 	LogDir      string
 	LogLevel    slog.Level
 }
@@ -59,6 +60,7 @@ func LoadAPI() (APIConfig, error) {
 		GracePeriod: v.GetDuration("GRACE_PERIOD"),
 		DBUrl:       v.GetString("DB_URL"),
 		YTApiKey:    v.GetString("YT_API_KEY"),
+		AdminToken:  v.GetString("ADMIN_TOKEN"),
 		LogDir:      v.GetString("LOG_DIR"),
 		LogLevel:    logLevel,
 	}

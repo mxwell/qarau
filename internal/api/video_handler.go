@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/mxwell/qarau/internal/fiberutil"
 	"github.com/mxwell/qarau/internal/subtitles"
 )
 
@@ -373,7 +374,7 @@ func unprocessable(c *fiber.Ctx, message string) error {
 }
 
 func internalError(c *fiber.Ctx, message string) error {
-	return errorJson(c, fiber.StatusInternalServerError, message)
+	return fiberutil.InternalError(c, message)
 }
 
 func errorJson(c *fiber.Ctx, status int, message string) error {
