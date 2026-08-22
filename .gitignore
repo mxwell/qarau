@@ -3,6 +3,10 @@
 /logs
 *.exe
 
+# native deps fetched by targets in Makefile
+/onnxruntime/
+/vosk-api/
+
 # local env / secrets (config comes from the environment)
 .env
 .env.*

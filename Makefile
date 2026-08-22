@@ -12,7 +12,10 @@ export PATH := $(if $(GOBIN),$(GOBIN),$(GOPATH)/bin):$(PATH)
 export CGO_CFLAGS="-I${PWD}/onnxruntime/include"
 export CGO_LDFLAGS="-L${PWD}/onnxruntime/lib"
 
-.PHONY: tools proto sqlc migrate-up migrate-down build run-api run-fetch run-asr test lint tidy
+ONNXRUNTIME_VERSION := 1.27.1
+VOSK_API_COMMIT     := 72797111dba20cd7e32c4ede867a4b81dccb0708
+
+.PHONY: tools deps deps-vosk proto sqlc migrate-up migrate-down build build-vosk run-api run-fetch run-asr test test-vosk lint lint-vosk tidy
 
 ## tools: install codegen tooling (protoc plugins, sqlc, goose)
 tools:
@@ -20,6 +23,31 @@ tools:
 	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 	go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
 	go install github.com/pressly/goose/v3/cmd/goose@latest
+
+## deps: fetch onnxruntime, the native lib needed for VAD/LangID
+deps:
+	@if [ ! -f onnxruntime/lib/libonnxruntime.so ]; then \
+		echo "Fetching onnxruntime $(ONNXRUNTIME_VERSION)..."; \
+		curl -fsSL -o /tmp/onnxruntime.tgz \
+			https://github.com/microsoft/onnxruntime/releases/download/v$(ONNXRUNTIME_VERSION)/onnxruntime-linux-x64-$(ONNXRUNTIME_VERSION).tgz; \
+		rm -rf onnxruntime && mkdir onnxruntime; \
+		tar -xzf /tmp/onnxruntime.tgz -C onnxruntime --strip-components=1; \
+		rm /tmp/onnxruntime.tgz; \
+	fi
+
+## deps-vosk: fetch vosk-api sources + prebuilt libvosk.so, only needed for the Vosk transcriber
+## We don't want to build the whole Kaldi & friends stuff,
+## so extract the *.so from the Python package
+deps-vosk:
+	@if [ ! -f vosk-api/src/libvosk.so ]; then \
+		echo "Fetching vosk-api @ $(VOSK_API_COMMIT) + prebuilt libvosk.so..."; \
+		rm -rf vosk-api; \
+		git clone --quiet https://github.com/alphacep/vosk-api.git vosk-api; \
+		git -C vosk-api checkout --quiet $(VOSK_API_COMMIT); \
+		pip3 install --quiet --no-input --target /tmp/vosk-pip vosk; \
+		cp /tmp/vosk-pip/vosk/libvosk.so vosk-api/src/libvosk.so; \
+		rm -rf /tmp/vosk-pip; \
+	fi
 
 ## proto: generate protobuf + gRPC Go code into gen/
 proto:
@@ -40,9 +68,13 @@ migrate-up:
 migrate-down:
 	goose -dir db/migrations postgres "$(PG_DSN)" down
 
-## build: compile all components into bin/
+## build: compile all components into bin/ (without Vosk)
 build:
 	go build -o bin/ ./cmd/...
+
+## build-vosk: same, with the legacy Vosk transcriber compiled in
+build-vosk:
+	go build -tags vosk -o bin/ ./cmd/...
 
 fetch_build_arm:
 	GOOS=linux GOARCH=arm64 go build -o bin/ ./cmd/fetch
@@ -63,10 +95,18 @@ run-asr:
 	go run ./cmd/asr
 
 test:
-	LD_LIBRARY_PATH=${PWD}/vosk-api/src:${PWD}/onnxruntime/lib go test ./...
+	LD_LIBRARY_PATH=${PWD}/onnxruntime/lib go test ./...
+
+## test-vosk: run tests with the legacy Vosk transcriber compiled in
+test-vosk:
+	LD_LIBRARY_PATH=${PWD}/vosk-api/src:${PWD}/onnxruntime/lib go test -tags vosk ./...
 
 lint:
 	go vet ./...
+
+## lint-vosk: vet the Vosk-tagged files too
+lint-vosk:
+	go vet -tags vosk ./...
 
 tidy:
 	go mod tidy

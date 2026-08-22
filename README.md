@@ -1,5 +1,7 @@
 # qarau
 
+[![CI](https://github.com/mxwell/qarau/actions/workflows/ci.yml/badge.svg)](https://github.com/mxwell/qarau/actions/workflows/ci.yml)
+
 Online video transcription pipeline. Three Go components - `api` (gRPC + HTTP, sole DB owner),
 `fetch` and `asr` (stateless workers that poll `api` over gRPC) - coordinated through a
 Postgres job queue.
@@ -13,11 +15,14 @@ Postgres job queue.
 ```sh
 make tools                 # one-time: install protoc plugins, sqlc, goose
 make proto sqlc            # generate code
+make deps                  # fetch onnxruntime
 
 export PG_DSN=<..>
 make migrate-up
 
 make build                 # binaries in ./bin
+make test
+make lint
 ```
 
 ## Layout
@@ -50,6 +55,12 @@ psql -h localhost -p 5432 -U postgres -d qaraudb < extract_audio_blog.sql | xxd 
 There is an extra byte at the start, that is removed by `tail`. The cause is not clear.
 
 ## ASR worker
+
+```
+LD_LIBRARY_PATH=${PWD}/onnxruntime/lib ./bin/asr
+```
+
+With Vosk:
 
 ```
 LD_LIBRARY_PATH=${PWD}/vosk-api/src:${PWD}/onnxruntime/lib ./bin/asr
