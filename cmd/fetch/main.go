@@ -6,11 +6,14 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	"github.com/getsentry/sentry-go"
 	qarauv1 "github.com/mxwell/qarau/gen/qarau/v1"
 	"github.com/mxwell/qarau/internal/config"
 	"github.com/mxwell/qarau/internal/fetch"
@@ -28,12 +31,33 @@ func run() error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	logger, logCloser, err := logging.NewDailyWriter(cfg.LogDir, "fetch", cfg.LogLevel, nil)
+	var altHandler slog.Handler
+	sentryInitialized := false
+	if cfg.SentryDSN != "" {
+		err = sentry.Init(sentry.ClientOptions{Dsn: cfg.SentryDSN})
+		if err != nil {
+			return fmt.Errorf("sentry init fail: %w", err)
+		}
+		defer sentry.Flush(2 * time.Second)
+		altHandler = logging.NewSentryIssueHandler()
+		sentryInitialized = true
+	}
+
+	logger, logCloser, err := logging.NewDailyWriter(
+		cfg.LogDir,
+		"fetch",
+		cfg.LogLevel,
+		altHandler,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to init logger: %w", err)
 	}
 	defer logCloser.Close()
+
 	logger.Info("fetch starting")
+	if sentryInitialized {
+		logger.Info("sentry initialized")
+	}
 
 	certificate, err := tls.LoadX509KeyPair(cfg.MTlsCert, cfg.MTlsKey)
 	if err != nil {

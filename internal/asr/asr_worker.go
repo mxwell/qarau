@@ -72,7 +72,7 @@ func NewASRWorker(
 func (aw *ASRWorker) Claim(ctx context.Context) (worker.LoopAction, claimedJob) {
 	response, err := aw.client.LeaseJob(ctx, &aw.leaseRequest)
 	if err != nil {
-		aw.logger.Error("lease request failed", "err", err)
+		aw.logger.Warn("lease request failed", "err", err)
 		return worker.BackoffOnError, claimedJob{}
 	}
 	job := response.Job

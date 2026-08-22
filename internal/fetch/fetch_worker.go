@@ -54,7 +54,7 @@ func NewFetchWorker(client qarauv1.JobServiceClient, logger *slog.Logger, downlo
 func (fw *FetchWorker) Claim(ctx context.Context) (worker.LoopAction, claimedJob) {
 	response, err := fw.client.LeaseJob(ctx, &fw.leaseRequest)
 	if err != nil {
-		fw.logger.Error("lease request failed", "err", err)
+		fw.logger.Warn("lease request failed", "err", err)
 		return worker.BackoffOnError, claimedJob{}
 	}
 	job := response.Job

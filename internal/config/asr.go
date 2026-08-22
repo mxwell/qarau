@@ -28,6 +28,7 @@ type ASRConfig struct {
 	PcmFile      string // for testing purposes
 	LogDir       string
 	LogLevel     slog.Level
+	SentryDSN    string
 }
 
 var (
@@ -77,6 +78,7 @@ func LoadASR() (ASRConfig, error) {
 		PcmFile:      v.GetString("PCM_FILE"),
 		LogDir:       v.GetString("LOG_DIR"),
 		LogLevel:     logLevel,
+		SentryDSN:    v.GetString("SENTRY_DSN"),
 	}
 
 	if len(cfg.APIHost) == 0 {

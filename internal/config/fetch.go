@@ -22,6 +22,7 @@ type FetchConfig struct {
 	WorkingDir    string
 	LogDir        string
 	LogLevel      slog.Level
+	SentryDSN     string
 }
 
 func (c *FetchConfig) GetJsRuntime() string {
@@ -80,6 +81,7 @@ func LoadFetch() (FetchConfig, error) {
 		WorkingDir:    v.GetString("WORKING_DIR"),
 		LogDir:        v.GetString("LOG_DIR"),
 		LogLevel:      logLevel,
+		SentryDSN:     v.GetString("SENTRY_DSN"),
 	}
 
 	if len(cfg.APIHost) == 0 {
