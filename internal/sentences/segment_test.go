@@ -31,7 +31,7 @@ func checkSentence(actual, expected Sentence, t *testing.T) {
 // holds the inclusive end index of every expected sentence. Every field of every
 // sentence is derived from `words` and checked, so callers only have to say
 // *where* the cuts fall.
-func checkSplit(t *testing.T, label string, words []qarauv1.Word, bounds []int) []Sentence {
+func checkSplit(t *testing.T, label string, words []*qarauv1.Word, bounds []int) []Sentence {
 	t.Helper()
 
 	actual := SegmentWordStream(words)
@@ -65,13 +65,13 @@ func checkSplit(t *testing.T, label string, words []qarauv1.Word, bounds []int) 
 }
 
 func Test_SegmentWordStream(t *testing.T) {
-	res0 := SegmentWordStream([]qarauv1.Word{})
+	res0 := SegmentWordStream([]*qarauv1.Word{})
 	if len(res0) != 0 {
 		t.Fatalf("got %d sentences instead of 0 for empty input", len(res0))
 	}
 
-	words := []qarauv1.Word{
-		qarauv1.Word{
+	words := []*qarauv1.Word{
+		&qarauv1.Word{
 			Word:       "w1",
 			StartMs:    500,
 			EndMs:      1000,
@@ -79,7 +79,7 @@ func Test_SegmentWordStream(t *testing.T) {
 			Speaker:    0,
 		},
 	}
-	w1 := &words[0]
+	w1 := words[0]
 
 	res1 := SegmentWordStream(words)
 	if len(res1) != 1 {
@@ -98,14 +98,14 @@ func Test_SegmentWordStream(t *testing.T) {
 		t,
 	)
 
-	words = append(words, qarauv1.Word{
+	words = append(words, &qarauv1.Word{
 		Word:       "w2",
 		StartMs:    1500,
 		EndMs:      2000,
 		Confidence: 100,
 		Speaker:    0,
 	})
-	w2 := &words[1]
+	w2 := words[1]
 
 	res2 := SegmentWordStream(words)
 	if len(res2) != 1 {
@@ -125,10 +125,10 @@ func Test_SegmentWordStream(t *testing.T) {
 	)
 }
 
-func getNWords(n int) []qarauv1.Word {
-	words := make([]qarauv1.Word, 0)
+func getNWords(n int) []*qarauv1.Word {
+	words := make([]*qarauv1.Word, 0)
 	for i := range n {
-		words = append(words, qarauv1.Word{
+		words = append(words, &qarauv1.Word{
 			Word:    "с" + strconv.Itoa(i),
 			StartMs: uint32(i*1000 + 100),
 			EndMs:   uint32(i*1000 + 500),
@@ -137,7 +137,7 @@ func getNWords(n int) []qarauv1.Word {
 	return words
 }
 
-func get5Words() []qarauv1.Word {
+func get5Words() []*qarauv1.Word {
 	return getNWords(5)
 }
 
@@ -382,7 +382,7 @@ func Test_SegmentWordStream_AbbreviationsSplit_KnownImperfection(t *testing.T) {
 // The realistic shape: several sentences of different lengths in one stream,
 // with every field checked end to end.
 func Test_SegmentWordStream_MultipleSentences(t *testing.T) {
-	words := []qarauv1.Word{
+	words := []*qarauv1.Word{
 		{Word: "Мен", StartMs: 100, EndMs: 400, Confidence: 90},
 		{Word: "мектепке", StartMs: 450, EndMs: 900, Confidence: 95},
 		{Word: "барамын.", StartMs: 950, EndMs: 1400, Confidence: 99},

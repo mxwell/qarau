@@ -113,15 +113,24 @@ func run() error {
 	)
 
 	queries := dbgen.New(db)
+
+	sentMan, err := api.NewSentenceManager(logger, queries, db)
+	if err != nil {
+		logger.Error("failed to create SentenceManager", "err", err)
+		return err
+	}
+
 	jobService, err := api.NewService(logger, queries, db)
 	if err != nil {
 		logger.Error("failed to create JobService", "err", err)
 		return err
 	}
-	qarauv1.RegisterJobServiceServer(
-		grpcServer,
-		api.NewServer(logger, jobService),
-	)
+	jobServer, err := api.NewJobServer(logger, jobService, sentMan)
+	if err != nil {
+		logger.Error("failed to create JobServer", "err", err)
+		return err
+	}
+	qarauv1.RegisterJobServiceServer(grpcServer, jobServer)
 
 	// Fiber app
 	sentryHandler := sentryfiber.New(sentryfiber.Options{
@@ -162,7 +171,7 @@ func run() error {
 			return err
 		}
 
-		adminHandler, err := admin.NewAdminHandler(logger, adminService)
+		adminHandler, err := admin.NewAdminHandler(logger, adminService, sentMan)
 		if err != nil {
 			logger.Error("failed to create AdminHandler")
 			return err

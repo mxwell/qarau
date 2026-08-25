@@ -126,6 +126,12 @@ type Job struct {
 	FinishedAt      pgtype.Timestamptz `json:"finished_at"`
 }
 
+type LlmQuotum struct {
+	Day              pgtype.Date `json:"day"`
+	UsedInputTokens  int64       `json:"used_input_tokens"`
+	UsedOutputTokens int64       `json:"used_output_tokens"`
+}
+
 type Playlist struct {
 	ID               int64              `json:"id"`
 	OnlinePlaylistID string             `json:"online_playlist_id"`
@@ -136,6 +142,27 @@ type Playlist struct {
 	ThumbnailWidth   int32              `json:"thumbnail_width"`
 	ThumbnailHeight  int32              `json:"thumbnail_height"`
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
+type Sentence struct {
+	TranscriptionID int64  `json:"transcription_id"`
+	Seq             int32  `json:"seq"`
+	StartWordSeq    int32  `json:"start_word_seq"`
+	EndWordSeq      int32  `json:"end_word_seq"`
+	StartMs         int32  `json:"start_ms"`
+	EndMs           int32  `json:"end_ms"`
+	Text            string `json:"text"`
+}
+
+type SentenceBreakdown struct {
+	TranscriptionID int64              `json:"transcription_id"`
+	SentenceSeq     int32              `json:"sentence_seq"`
+	TargetLang      string             `json:"target_lang"`
+	Model           string             `json:"model"`
+	PromptVersion   int32              `json:"prompt_version"`
+	Translations    []byte             `json:"translations"`
+	Breakdown       []byte             `json:"breakdown"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
 type Transcription struct {

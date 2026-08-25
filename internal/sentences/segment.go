@@ -28,7 +28,7 @@ func isTrailingNoise(r rune) bool {
 	return unicode.IsSpace(r) || strings.ContainsRune(`»"”'’)]`, r)
 }
 
-func joinWords(words []qarauv1.Word) string {
+func joinWords(words []*qarauv1.Word) string {
 	parts := make([]string, len(words))
 	for i := range words {
 		parts[i] = words[i].Word
@@ -36,7 +36,7 @@ func joinWords(words []qarauv1.Word) string {
 	return strings.Join(parts, " ")
 }
 
-func SegmentWordStream(words []qarauv1.Word) []Sentence {
+func SegmentWordStream(words []*qarauv1.Word) []Sentence {
 	result := make([]Sentence, 0)
 
 	n := len(words)

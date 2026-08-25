@@ -17,15 +17,26 @@ type Querier interface {
 	CreateAudioBlob(ctx context.Context, arg CreateAudioBlobParams) (int64, error)
 	CreateFetchJobIfAbsent(ctx context.Context, arg CreateFetchJobIfAbsentParams) (int64, error)
 	CreateVideo(ctx context.Context, arg CreateVideoParams) (int64, error)
+	DeleteSentencesByTranscriptionId(ctx context.Context, transcriptionID int64) error
 	DeleteWordsByTranscriptionId(ctx context.Context, transcriptionID int64) error
+	// The sentence being spoken at start_ms: the last one that has already begun.
+	// Returns no rows when start_ms precedes the first sentence — callers fall back
+	// to GetFirstSentenceSeq.
+	FindSentenceSeqByStartMs(ctx context.Context, arg FindSentenceSeqByStartMsParams) (int32, error)
 	FindSeqByStartMs(ctx context.Context, arg FindSeqByStartMsParams) (int32, error)
 	GetAsrJobQueue(ctx context.Context, createdBefore pgtype.Timestamptz) ([]GetAsrJobQueueRow, error)
 	GetAsrQuota(ctx context.Context, day pgtype.Date) (int32, error)
 	GetAudioBlob(ctx context.Context, videoID int64) (GetAudioBlobRow, error)
 	GetFetchJobQueue(ctx context.Context, createdBefore pgtype.Timestamptz) ([]GetFetchJobQueueRow, error)
+	GetFirstSentenceSeq(ctx context.Context, transcriptionID int64) (int32, error)
 	GetJob(ctx context.Context, jobID int64) (GetJobRow, error)
 	GetLast24hJobs(ctx context.Context) ([]GetLast24hJobsRow, error)
 	GetLastJobs(ctx context.Context, jobs int32) ([]GetLastJobsRow, error)
+	GetLlmQuota(ctx context.Context, day pgtype.Date) (GetLlmQuotaRow, error)
+	// Whatever breakdown exists for these sentences, regardless of which model or
+	// prompt produced it.
+	GetSentenceBreakdowns(ctx context.Context, arg GetSentenceBreakdownsParams) ([]GetSentenceBreakdownsRow, error)
+	GetSentencesRange(ctx context.Context, arg GetSentencesRangeParams) ([]GetSentencesRangeRow, error)
 	GetSuggestedVideos(ctx context.Context) ([]GetSuggestedVideosRow, error)
 	GetTranscription(ctx context.Context, id int64) (Transcription, error)
 	GetTranscriptionsByVideoID(ctx context.Context, videoID int64) ([]Transcription, error)
@@ -33,6 +44,11 @@ type Querier interface {
 	GetVideoByID(ctx context.Context, videoID int64) (GetVideoByIDRow, error)
 	GetVideoJobs(ctx context.Context, videoID int64) ([]GetVideoJobsRow, error)
 	GetWords(ctx context.Context, arg GetWordsParams) ([]Word, error)
+	// Only ever called for sentences that have no breakdown yet, so a conflict
+	// means two clients clicked the same position concurrently. Keep the first
+	// one: the loser of the race must not error, and the rows are equivalent.
+	InsertSentenceBreakdown(ctx context.Context, arg InsertSentenceBreakdownParams) error
+	InsertSentences(ctx context.Context, arg []InsertSentencesParams) (int64, error)
 	InsertWords(ctx context.Context, arg []InsertWordsParams) (int64, error)
 	ListPlaylists(ctx context.Context, arg ListPlaylistsParams) ([]Playlist, error)
 	MarkJobDone(ctx context.Context, arg MarkJobDoneParams) (int64, error)
@@ -42,6 +58,7 @@ type Querier interface {
 	UpdatePlaylistWithError(ctx context.Context, arg UpdatePlaylistWithErrorParams) error
 	UpdateVideo(ctx context.Context, arg UpdateVideoParams) error
 	UpsertAsrQuota(ctx context.Context, arg UpsertAsrQuotaParams) (int32, error)
+	UpsertLlmQuota(ctx context.Context, arg UpsertLlmQuotaParams) (UpsertLlmQuotaRow, error)
 	UpsertTranscription(ctx context.Context, arg UpsertTranscriptionParams) (int64, error)
 }
 

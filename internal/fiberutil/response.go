@@ -21,3 +21,7 @@ func UnauthorizedError(c *fiber.Ctx, message string) error {
 func BadRequest(c *fiber.Ctx, message string) error {
 	return errorJson(c, fiber.StatusBadRequest, message)
 }
+
+func NotFound(c *fiber.Ctx, message string) error {
+	return errorJson(c, fiber.StatusNotFound, message)
+}

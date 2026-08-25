@@ -9,6 +9,44 @@ import (
 	"context"
 )
 
+// iteratorForInsertSentences implements pgx.CopyFromSource.
+type iteratorForInsertSentences struct {
+	rows                 []InsertSentencesParams
+	skippedFirstNextCall bool
+}
+
+func (r *iteratorForInsertSentences) Next() bool {
+	if len(r.rows) == 0 {
+		return false
+	}
+	if !r.skippedFirstNextCall {
+		r.skippedFirstNextCall = true
+		return true
+	}
+	r.rows = r.rows[1:]
+	return len(r.rows) > 0
+}
+
+func (r iteratorForInsertSentences) Values() ([]interface{}, error) {
+	return []interface{}{
+		r.rows[0].TranscriptionID,
+		r.rows[0].Seq,
+		r.rows[0].StartWordSeq,
+		r.rows[0].EndWordSeq,
+		r.rows[0].StartMs,
+		r.rows[0].EndMs,
+		r.rows[0].Text,
+	}, nil
+}
+
+func (r iteratorForInsertSentences) Err() error {
+	return nil
+}
+
+func (q *Queries) InsertSentences(ctx context.Context, arg []InsertSentencesParams) (int64, error) {
+	return q.db.CopyFrom(ctx, []string{"sentences"}, []string{"transcription_id", "seq", "start_word_seq", "end_word_seq", "start_ms", "end_ms", "text"}, &iteratorForInsertSentences{rows: arg})
+}
+
 // iteratorForInsertWords implements pgx.CopyFromSource.
 type iteratorForInsertWords struct {
 	rows                 []InsertWordsParams

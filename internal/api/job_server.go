@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"errors"
 	"hash/crc32"
 	"io"
 	"log/slog"
@@ -25,19 +26,24 @@ type JobServer struct {
 	qarauv1.UnimplementedJobServiceServer
 	logger  *slog.Logger
 	service *JobService
+	sentMan *SentenceManager
 }
 
-func NewServer(log *slog.Logger, service *JobService) *JobServer {
+func NewJobServer(log *slog.Logger, service *JobService, sentMan *SentenceManager) (*JobServer, error) {
 	if log == nil {
-		panic("api: NewServer requires a non-nil logger")
+		return nil, errors.New("nil log in JobServer creation")
 	}
 	if service == nil {
-		panic("api: NewServer requires a non-nil service")
+		return nil, errors.New("nil service in JobServer creation")
+	}
+	if sentMan == nil {
+		return nil, errors.New("nil sentMan in JobServer creation")
 	}
 	return &JobServer{
 		logger:  log,
 		service: service,
-	}
+		sentMan: sentMan,
+	}, nil
 }
 
 var _ qarauv1.JobServiceServer = (*JobServer)(nil)
@@ -313,7 +319,7 @@ func (s *JobServer) CompleteAsr(ctx context.Context, request *qarauv1.CompleteAs
 		}, status.Errorf(codes.InvalidArgument, "nil transcription")
 	}
 
-	err = s.service.CompleteAsrJob(ctx, workerID, jobID, request.VideoId, transcription)
+	transcriptionID, err := s.service.CompleteAsrJob(ctx, workerID, jobID, request.VideoId, transcription)
 	if err != nil {
 		s.logger.Error("failed to complete ASR job", "job", jobID, "err", err)
 		return &qarauv1.GenericResponse{
@@ -321,7 +327,27 @@ func (s *JobServer) CompleteAsr(ctx context.Context, request *qarauv1.CompleteAs
 			ErrorMessage: "internal error",
 		}, status.Errorf(codes.Internal, "internal error")
 	}
-	s.logger.Info("ASR job complete", "job", jobID)
+	s.logger.Info("ASR job complete", "job", jobID, "transcription", transcriptionID)
+
+	insertedSentences, err := s.sentMan.CreateAndUpsertSentencesForTranscription(
+		ctx,
+		transcriptionID,
+		transcription,
+	)
+	if err != nil {
+		s.logger.Error(
+			"failed to upsert sentences for transcription",
+			"transcriptionID", transcriptionID,
+			"err", err,
+		)
+	} else {
+		s.logger.Info(
+			"upserted sentences for transcription",
+			"transcriptionID", transcriptionID,
+			"sents", insertedSentences,
+		)
+	}
+
 	return &qarauv1.GenericResponse{
 		Ok: true,
 	}, nil

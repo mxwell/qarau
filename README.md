@@ -189,3 +189,13 @@ labels = [enc.ind2lab[i] for i in range(len(enc.ind2lab))]  # expected 107 langu
 with open("voxlingua107_labels.json", "w") as f:
     json.dump(labels, f, ensure_ascii=False, indent=2)
 ```
+
+## Admin
+
+```
+curl -sS \
+  -H "Authorization: Bearer ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"transcription_id": NUM}' \
+  https://qarau.khairulin.com/qarauadmin/api/v1/backfill_sentences
+```

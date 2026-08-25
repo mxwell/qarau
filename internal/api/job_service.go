@@ -234,20 +234,24 @@ func (s *JobService) getVideoDuration(ctx context.Context, videoID int64) (int32
 
 /*
  * The method does several things under 1 transaction:
- * - creates a new transription (or replaces old transcription by the same model)
+ * - creates a new transcription (or replaces old transcription by the same model)
  * - ensures old words are removed in the case of existing transcription replacement
+ * - drops the old transcription's sentences (cascading to their cached breakdowns)
  * - inserts new words
  * - marks the ASR job done
+ * - increments ASR quota usage
+ *
+ * Return transcription ID, error
  */
-func (s *JobService) CompleteAsrJob(ctx context.Context, workerID string, jobID int64, videoID int64, transcription *qarauv1.Transcription) error {
+func (s *JobService) CompleteAsrJob(ctx context.Context, workerID string, jobID int64, videoID int64, transcription *qarauv1.Transcription) (int64, error) {
 	usedSeconds, err := s.getVideoDuration(ctx, videoID)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer tx.Rollback(ctx) // safe even after tx.Commit() -- does nothing
 
@@ -259,13 +263,19 @@ func (s *JobService) CompleteAsrJob(ctx context.Context, workerID string, jobID 
 	})
 	if err != nil {
 		s.log.Error("failed to upsert transcription", "job", jobID, "err", err)
-		return err
+		return 0, err
 	}
 
 	err = qtx.DeleteWordsByTranscriptionId(ctx, transcriptionID)
 	if err != nil {
 		s.log.Error("word delete request failed", "job", jobID, "err", err)
-		return err
+		return 0, err
+	}
+
+	err = qtx.DeleteSentencesByTranscriptionId(ctx, transcriptionID)
+	if err != nil {
+		s.log.Error("sentence delete request failed", "job", jobID, "transcriptionID", transcriptionID, "err", err)
+		return 0, err
 	}
 
 	if len(transcription.Words) > 0 {
@@ -285,7 +295,7 @@ func (s *JobService) CompleteAsrJob(ctx context.Context, workerID string, jobID 
 		insertCount, err := qtx.InsertWords(ctx, wordsParams)
 		if err != nil {
 			s.log.Error("word bulk insert failed", "job", jobID, "count", len(transcription.Words), "err", err)
-			return err
+			return 0, err
 		}
 		s.log.Info("inserted words", "job", jobID, "transcription", transcriptionID, "insertCount", insertCount)
 	} else {
@@ -299,7 +309,7 @@ func (s *JobService) CompleteAsrJob(ctx context.Context, workerID string, jobID 
 	})
 	if err != nil {
 		s.log.Error("failed to mark ASR job done", "job", jobID, "err", err)
-		return err
+		return 0, err
 	}
 
 	_, err = qtx.UpsertAsrQuota(ctx, dbgen.UpsertAsrQuotaParams{
@@ -308,11 +318,11 @@ func (s *JobService) CompleteAsrJob(ctx context.Context, workerID string, jobID 
 	})
 	if err != nil {
 		s.log.Error("failed to upsert ASR quota", "job", jobID, "err", err)
-		return err
+		return 0, err
 	}
 
 	s.log.Info("transcription is stored to DB", "job", jobID, "transcription", transcriptionID, "words", len(transcription.Words), "used_secs", usedSeconds)
-	return tx.Commit(ctx)
+	return transcriptionID, tx.Commit(ctx)
 }
 
 func (s *JobService) FailJob(ctx context.Context, jobID int64, workerID string, errorMessage string, final bool) error {
