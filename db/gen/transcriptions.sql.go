@@ -163,6 +163,31 @@ func (q *Queries) GetTranscriptionsByVideoID(ctx context.Context, videoID int64)
 	return items, nil
 }
 
+const getVideoByTranscriptionID = `-- name: GetVideoByTranscriptionID :one
+SELECT
+    v.title,
+    v.channel_title
+FROM
+    transcriptions t
+JOIN
+    videos v
+ON v.id = t.video_id
+WHERE
+    t.id = $1
+`
+
+type GetVideoByTranscriptionIDRow struct {
+	Title        string `json:"title"`
+	ChannelTitle string `json:"channel_title"`
+}
+
+func (q *Queries) GetVideoByTranscriptionID(ctx context.Context, transcriptionID int64) (GetVideoByTranscriptionIDRow, error) {
+	row := q.db.QueryRow(ctx, getVideoByTranscriptionID, transcriptionID)
+	var i GetVideoByTranscriptionIDRow
+	err := row.Scan(&i.Title, &i.ChannelTitle)
+	return i, err
+}
+
 const getWords = `-- name: GetWords :many
 SELECT transcription_id, seq, start_ms, end_ms, word, confidence, speaker FROM words
 WHERE

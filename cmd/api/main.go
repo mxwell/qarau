@@ -23,7 +23,9 @@ import (
 	"github.com/mxwell/qarau/internal/admin"
 	"github.com/mxwell/qarau/internal/api"
 	"github.com/mxwell/qarau/internal/config"
+	"github.com/mxwell/qarau/internal/llm"
 	"github.com/mxwell/qarau/internal/logging"
+	"github.com/mxwell/qarau/internal/quota"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -150,7 +152,17 @@ func run() error {
 		logger.Error("failed to create YouTube API client", "err", err)
 		return err
 	}
-	videoService, err := api.NewVideoService(logger, queries, ytClient)
+	llmQuotaCtl, err := quota.NewLlmQuotaController(cfg.LlmInPrice, cfg.LlmOutPrice, cfg.LlmDaily)
+	if err != nil {
+		logger.Error("failed to create LLM quota controller", "err", err)
+		return err
+	}
+	oaiClient, err := llm.New(logger, cfg.LlmApiKey)
+	if err != nil {
+		logger.Error("failed to create OpenAI client", "err", err)
+		return err
+	}
+	videoService, err := api.NewVideoService(logger, queries, db, ytClient, llmQuotaCtl, oaiClient)
 	if err != nil {
 		logger.Error("failed to create VideoService", "err", err)
 		return err

@@ -69,6 +69,9 @@ ORDER BY sentence_seq ASC;
 -- Only ever called for sentences that have no breakdown yet, so a conflict
 -- means two clients clicked the same position concurrently. Keep the first
 -- one: the loser of the race must not error, and the rows are equivalent.
+--
+-- XXX `InsertSentenceBreakdowns :batchexec` might be a better fit
+-- when dozens of rows are inserted at once.
 INSERT INTO sentence_breakdowns (
     transcription_id,
     sentence_seq,

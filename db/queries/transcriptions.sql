@@ -77,3 +77,15 @@ LIMIT 1;
   JOIN videos v ON v.id = t.video_id
   ORDER BY random()
   LIMIT 10;
+
+-- name: GetVideoByTranscriptionID :one
+SELECT
+    v.title,
+    v.channel_title
+FROM
+    transcriptions t
+JOIN
+    videos v
+ON v.id = t.video_id
+WHERE
+    t.id = sqlc.arg('transcription_id');

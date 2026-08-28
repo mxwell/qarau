@@ -10,6 +10,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/mxwell/qarau/internal/fiberutil"
+	"github.com/mxwell/qarau/internal/llm"
 	"github.com/mxwell/qarau/internal/subtitles"
 )
 
@@ -44,6 +45,7 @@ func (h *VideoHandler) Register(r fiber.Router) {
 	r.Get("/probe/:online_video_id", h.Probe)
 	r.Post("/fetch/:video_id", h.Fetch)
 	r.Get("/subtitles/:transcription_id", h.Subtitles)
+	r.Get("/breakdowns/:transcription_id", h.Breakdowns)
 	r.Get("/export/:transcription_id", h.Export)
 
 	r.Get("/dash", h.Dash)
@@ -152,7 +154,7 @@ func (h *VideoHandler) getTranscriptionIDParam(c *fiber.Ctx) (int64, error) {
 	transcriptionID, err := strconv.ParseInt(transcriptionIDString, 10, 64)
 	if err != nil {
 		h.log.Info("failed to parse transcriptionID", "param", transcriptionIDString, "err", err)
-		return 0, err
+		return 0, errInvalidParam
 	}
 	if transcriptionID < 0 {
 		h.log.Info("negative transcriptionID", "transcriptionID", transcriptionID)
@@ -161,10 +163,26 @@ func (h *VideoHandler) getTranscriptionIDParam(c *fiber.Ctx) (int64, error) {
 	return transcriptionID, nil
 }
 
+func (h *VideoHandler) getStartMsQueryArg(startMsStr string) (int64, error) {
+	startMs, err := strconv.ParseInt(startMsStr, 10, 64)
+	if err != nil {
+		h.log.Info("failed to parse start_ms", "param", startMsStr, "err", err)
+		return 0, errInvalidParam
+	}
+	if startMs < 0 || startMs > math.MaxInt32 {
+		h.log.Info("invalid start_ms", "start_ms", startMs)
+		return 0, errInvalidParam
+	}
+	return startMs, nil
+}
+
 func (h *VideoHandler) Subtitles(c *fiber.Ctx) error {
 	transcriptionID, err := h.getTranscriptionIDParam(c)
 	if err != nil {
-		return badRequest(c, "invalid transcription_id")
+		if errors.Is(err, errInvalidParam) {
+			return badRequest(c, "invalid transcription_id")
+		}
+		return fiberutil.BadRequest(c, "internal error")
 	}
 
 	seq := int32(0)
@@ -174,14 +192,12 @@ func (h *VideoHandler) Subtitles(c *fiber.Ctx) error {
 			h.log.Info("both start_ms and seq set in params", "start_ms", startMsStr, "seq", seqStr)
 			return badRequest(c, "provide either seq or start_ms, not both")
 		}
-		startMs, err := strconv.ParseInt(startMsStr, 10, 64)
+		startMs, err := h.getStartMsQueryArg(startMsStr)
 		if err != nil {
-			h.log.Info("failed to parse start_ms", "param", startMsStr, "err", err)
-			return badRequest(c, "invalid start_ms")
-		}
-		if startMs < 0 || startMs > math.MaxInt32 {
-			h.log.Info("invalid start_ms", "start_ms", startMs)
-			return badRequest(c, "invalid start_ms")
+			if errors.Is(err, errInvalidParam) {
+				return fiberutil.BadRequest(c, "invalid start_ms")
+			}
+			return fiberutil.InternalError(c, "internal error")
 		}
 		seq, err = h.svc.FindSeqByStartMs(c.UserContext(), transcriptionID, int32(startMs))
 		if err != nil {
@@ -234,6 +250,55 @@ func (h *VideoHandler) Subtitles(c *fiber.Ctx) error {
 		return internalError(c, "internal error")
 	}
 	return c.JSON(subtitleSpan)
+}
+
+// GET /breakdowns/<transcription_id>?start_ms=5000&lang=ru
+func (h *VideoHandler) Breakdowns(c *fiber.Ctx) error {
+	transcriptionID, err := h.getTranscriptionIDParam(c)
+	if err != nil {
+		if errors.Is(err, errInvalidParam) {
+			return fiberutil.BadRequest(c, "invalid transcription_id")
+		}
+		return fiberutil.InternalError(c, "internal error")
+	}
+
+	seq := int32(0)
+
+	if startMsStr := c.Query("start_ms"); startMsStr != "" {
+		startMs, err := h.getStartMsQueryArg(startMsStr)
+		if err != nil {
+			if errors.Is(err, errInvalidParam) {
+				return fiberutil.BadRequest(c, "invalid start_ms")
+			}
+			return fiberutil.InternalError(c, "internal error")
+		}
+		seq, err = h.svc.FindSentenceSeqByStartMs(c.UserContext(), transcriptionID, int32(startMs))
+		if err != nil {
+			if errors.Is(err, ErrNoSuchSeq) {
+				h.log.Info("no sentences at position", "transcriptionID", transcriptionID, "start_ms", startMs, "err", err)
+				return fiberutil.NotFound(c, "no sentences at this position")
+			} else {
+				h.log.Error("seq search by start_ms failed", "transcriptionID", transcriptionID, "start_ms", startMs, "err", err)
+				return internalError(c, "internal error")
+			}
+		}
+		h.log.Info("found sent seq by start_ms", "seq", seq, "start_ms", startMs)
+	}
+
+	targetLang := c.Query("lang")
+	// TODO add English
+	if targetLang != llm.LangRu {
+		h.log.Info("invalid target language", "transcriptionID", transcriptionID, "lang", targetLang)
+		return fiberutil.BadRequest(c, "invalid lang")
+	}
+
+	getBreakdownsResponse, err := h.svc.GetBreakdowns(c.UserContext(), transcriptionID, targetLang, seq)
+	if err != nil {
+		h.log.Error("GetBreakdowns fail", "err", err)
+		return fiberutil.InternalError(c, "internal error")
+	}
+
+	return c.JSON(getBreakdownsResponse)
 }
 
 func (h *VideoHandler) Export(c *fiber.Ctx) error {

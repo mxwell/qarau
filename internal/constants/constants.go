@@ -10,6 +10,8 @@ const (
 	PcmSampleRate           = 16_000
 
 	MicrosecondsPerSecond = 1_000_000
+
+	SentenceBatchSize = 25
 )
 
 var (

@@ -42,11 +42,15 @@ type Querier interface {
 	GetTranscriptionsByVideoID(ctx context.Context, videoID int64) ([]Transcription, error)
 	GetVideo(ctx context.Context, onlineVideoID string) (GetVideoRow, error)
 	GetVideoByID(ctx context.Context, videoID int64) (GetVideoByIDRow, error)
+	GetVideoByTranscriptionID(ctx context.Context, transcriptionID int64) (GetVideoByTranscriptionIDRow, error)
 	GetVideoJobs(ctx context.Context, videoID int64) ([]GetVideoJobsRow, error)
 	GetWords(ctx context.Context, arg GetWordsParams) ([]Word, error)
 	// Only ever called for sentences that have no breakdown yet, so a conflict
 	// means two clients clicked the same position concurrently. Keep the first
 	// one: the loser of the race must not error, and the rows are equivalent.
+	//
+	// XXX `InsertSentenceBreakdowns :batchexec` might be a better fit
+	// when dozens of rows are inserted at once.
 	InsertSentenceBreakdown(ctx context.Context, arg InsertSentenceBreakdownParams) error
 	InsertSentences(ctx context.Context, arg []InsertSentencesParams) (int64, error)
 	InsertWords(ctx context.Context, arg []InsertWordsParams) (int64, error)

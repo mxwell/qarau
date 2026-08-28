@@ -21,6 +21,10 @@ type APIConfig struct {
 	DBUrl       string
 	YTApiKey    string
 	AdminToken  string
+	LlmApiKey   string
+	LlmInPrice  string
+	LlmOutPrice string
+	LlmDaily    string
 	LogDir      string
 	LogLevel    slog.Level
 	SentryDSN   string
@@ -40,6 +44,7 @@ func LoadAPI() (APIConfig, error) {
 	v.SetDefault("MTLS_KEY", "certs/api.key")
 	v.SetDefault("REST_PORT", 7992)
 	v.SetDefault("GRACE_PERIOD", "3s")
+	v.SetDefault("LLM_DAILY", "0")
 	v.SetDefault("LOG_DIR", "logs")
 	v.SetDefault("LOG_LEVEL", "INFO")
 
@@ -62,6 +67,10 @@ func LoadAPI() (APIConfig, error) {
 		DBUrl:       v.GetString("DB_URL"),
 		YTApiKey:    v.GetString("YT_API_KEY"),
 		AdminToken:  v.GetString("ADMIN_TOKEN"),
+		LlmApiKey:   v.GetString("LLM_API_KEY"),
+		LlmInPrice:  v.GetString("LLM_INPUT_PRICE"),
+		LlmOutPrice: v.GetString("LLM_OUTPUT_PRICE"),
+		LlmDaily:    v.GetString("LLM_DAILY"),
 		LogDir:      v.GetString("LOG_DIR"),
 		LogLevel:    logLevel,
 		SentryDSN:   v.GetString("SENTRY_DSN"),
@@ -84,6 +93,12 @@ func LoadAPI() (APIConfig, error) {
 	}
 	if cfg.YTApiKey == "" {
 		return cfg, errors.New("api config error: invalid YouTube API key")
+	}
+	if !strings.HasPrefix(cfg.LlmApiKey, "sk-") {
+		return cfg, errors.New("api config error: invalid LLM API key")
+	}
+	if cfg.LlmInPrice == "" || cfg.LlmOutPrice == "" || cfg.LlmDaily == "" {
+		return cfg, fmt.Errorf("api config error: some llm fields are missing: '%s', '%s', '%s'", cfg.LlmInPrice, cfg.LlmOutPrice, cfg.LlmDaily)
 	}
 	if cfg.LogDir == "" {
 		return cfg, fmt.Errorf("api config error: empty log dir")
