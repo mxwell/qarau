@@ -277,7 +277,10 @@ func (h *VideoHandler) Breakdowns(c *fiber.Ctx) error {
 		if err != nil {
 			if errors.Is(err, ErrNoSuchSeq) {
 				h.log.Info("no sentences at position", "transcriptionID", transcriptionID, "start_ms", startMs, "err", err)
-				return fiberutil.NotFound(c, "no sentences at this position")
+				return c.JSON(GetBreakdownsResponse{
+					Ok:      false,
+					Message: "sentences not found",
+				})
 			} else {
 				h.log.Error("seq search by start_ms failed", "transcriptionID", transcriptionID, "start_ms", startMs, "err", err)
 				return internalError(c, "internal error")
