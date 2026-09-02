@@ -46,6 +46,7 @@ func (h *VideoHandler) Register(r fiber.Router) {
 	r.Post("/fetch/:video_id", h.Fetch)
 	r.Get("/subtitles/:transcription_id", h.Subtitles)
 	r.Get("/breakdowns/:transcription_id", h.Breakdowns)
+	r.Post("/breakdowns/enqueue", h.EnqueueBreakdowns)
 	r.Get("/export/:transcription_id", h.Export)
 
 	r.Get("/dash", h.Dash)
@@ -252,7 +253,7 @@ func (h *VideoHandler) Subtitles(c *fiber.Ctx) error {
 	return c.JSON(subtitleSpan)
 }
 
-// GET /breakdowns/<transcription_id>?start_ms=5000&lang=ru
+// GET /breakdowns/<transcription_id>?start_ms=5000&lang=ru - read-only method
 func (h *VideoHandler) Breakdowns(c *fiber.Ctx) error {
 	transcriptionID, err := h.getTranscriptionIDParam(c)
 	if err != nil {
@@ -299,6 +300,37 @@ func (h *VideoHandler) Breakdowns(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(getBreakdownsResponse)
+}
+
+type EnqueueBreakdownsRequest struct {
+	TranscriptionID int64  `json:"transcription_id"`
+	Lang            string `json:"lang"`
+	SentSeq         int32  `json:"sent_seq"`
+}
+
+func (h *VideoHandler) EnqueueBreakdowns(c *fiber.Ctx) error {
+	var req EnqueueBreakdownsRequest
+	if err := c.BodyParser(&req); err != nil {
+		return fiberutil.BadRequest(c, "body parse error")
+	}
+	lang := req.Lang
+	// TODO add English
+	if lang != llm.LangRu {
+		h.log.Info("invalid target language", "lang", lang)
+		return fiberutil.BadRequest(c, "invalid lang")
+	}
+
+	enqueueBreakdownsResponse, err := h.svc.EnqueueBreakdowns(
+		c.UserContext(),
+		req.TranscriptionID,
+		lang,
+		req.SentSeq,
+	)
+	if err != nil {
+		h.log.Error("EnqueueBreakdowns fail", "err", err)
+		return fiberutil.InternalError(c, "internal error")
+	}
+	return c.JSON(enqueueBreakdownsResponse)
 }
 
 func (h *VideoHandler) Export(c *fiber.Ctx) error {

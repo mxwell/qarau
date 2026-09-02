@@ -157,12 +157,7 @@ func run() error {
 		logger.Error("failed to create LLM quota controller", "err", err)
 		return err
 	}
-	oaiClient, err := llm.New(logger, cfg.LlmApiKey)
-	if err != nil {
-		logger.Error("failed to create OpenAI client", "err", err)
-		return err
-	}
-	videoService, err := api.NewVideoService(logger, queries, db, ytClient, llmQuotaCtl, oaiClient)
+	videoService, err := api.NewVideoService(logger, queries, db, ytClient, llmQuotaCtl)
 	if err != nil {
 		logger.Error("failed to create VideoService", "err", err)
 		return err
@@ -194,6 +189,17 @@ func run() error {
 			admin.AdminAuth(adminToken),
 		)
 		adminHandler.Register(adminRouter)
+	}
+
+	oaiClient, err := llm.New(logger, cfg.LlmApiKey)
+	if err != nil {
+		logger.Error("failed to create OpenAI client", "err", err)
+		return err
+	}
+	bbRunner, err := llm.NewBBRunner(logger, queries, db, llmQuotaCtl, oaiClient)
+	if err != nil {
+		logger.Error("failed to create BBRunner", "err", err)
+		return err
 	}
 
 	group, groupCtx := errgroup.WithContext(ctx)
@@ -253,6 +259,21 @@ func run() error {
 		if err := app.Listen(addr); err != nil {
 			logger.Error("rest api serve failed", "err", err)
 			return err
+		}
+		return nil
+	})
+
+	group.Go(func() error {
+		logger.Info("starting BBRunner")
+		if err := bbRunner.Loop(groupCtx); err != nil {
+			if errors.Is(err, llm.ErrCancelFromContext) {
+				logger.Info("BBRunner stopped by signal from context")
+			} else {
+				logger.Error("BBRunner failed", "err", err)
+				return err
+			}
+		} else {
+			logger.Info("BBRunner stopped")
 		}
 		return nil
 	})

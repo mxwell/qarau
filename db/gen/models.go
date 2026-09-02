@@ -11,6 +11,50 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type BatchState string
+
+const (
+	BatchStatePending BatchState = "pending"
+	BatchStateRunning BatchState = "running"
+	BatchStateDone    BatchState = "done"
+	BatchStateFailed  BatchState = "failed"
+)
+
+func (e *BatchState) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = BatchState(s)
+	case string:
+		*e = BatchState(s)
+	default:
+		return fmt.Errorf("unsupported scan type for BatchState: %T", src)
+	}
+	return nil
+}
+
+type NullBatchState struct {
+	BatchState BatchState `json:"batch_state"`
+	Valid      bool       `json:"valid"` // Valid is true if BatchState is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullBatchState) Scan(value interface{}) error {
+	if value == nil {
+		ns.BatchState, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.BatchState.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullBatchState) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.BatchState), nil
+}
+
 type JobState string
 
 const (
@@ -107,6 +151,20 @@ type AudioBlob struct {
 	Content   []byte             `json:"content"`
 	Filename  string             `json:"filename"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+type BreakdownBatch struct {
+	ID              int64              `json:"id"`
+	TranscriptionID int64              `json:"transcription_id"`
+	BatchStartSeq   int32              `json:"batch_start_seq"`
+	TargetLang      string             `json:"target_lang"`
+	State           BatchState         `json:"state"`
+	LockedBy        *string            `json:"locked_by"`
+	LockedUntil     pgtype.Timestamptz `json:"locked_until"`
+	LastError       *string            `json:"last_error"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	StartedAt       pgtype.Timestamptz `json:"started_at"`
+	FinishedAt      pgtype.Timestamptz `json:"finished_at"`
 }
 
 type Job struct {

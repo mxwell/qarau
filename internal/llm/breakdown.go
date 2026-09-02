@@ -1,11 +1,10 @@
-package api
+package llm
 
 import (
 	"encoding/json"
 	"fmt"
 
 	dbgen "github.com/mxwell/qarau/db/gen"
-	"github.com/mxwell/qarau/internal/llm"
 )
 
 type WordBreakdown struct {
@@ -27,9 +26,9 @@ type SentBreakdown struct {
 }
 
 type BreakdownContent struct {
-	seq          int32
-	translations []string
-	words        []WordBreakdown
+	Seq          int32
+	Translations []string
+	Words        []WordBreakdown
 }
 
 type PlainTranslations struct {
@@ -40,7 +39,7 @@ type PlainBreakdown struct {
 	Words []WordBreakdown `json:"words"`
 }
 
-func toBreakdownContent(rows []dbgen.GetSentenceBreakdownsRow) ([]BreakdownContent, error) {
+func ToBreakdownContent(rows []dbgen.GetSentenceBreakdownsRow) ([]BreakdownContent, error) {
 	result := make([]BreakdownContent, 0)
 	for _, row := range rows {
 		var plainTranslations PlainTranslations
@@ -52,15 +51,15 @@ func toBreakdownContent(rows []dbgen.GetSentenceBreakdownsRow) ([]BreakdownConte
 			return nil, fmt.Errorf("breakdown jsonb parse fail at sent seq %d: %w", row.SentenceSeq, err)
 		}
 		result = append(result, BreakdownContent{
-			seq:          row.SentenceSeq,
-			translations: plainTranslations.Variants,
-			words:        plainBreakdown.Words,
+			Seq:          row.SentenceSeq,
+			Translations: plainTranslations.Variants,
+			Words:        plainBreakdown.Words,
 		})
 	}
 	return result, nil
 }
 
-func FromWordGenericV1(words []llm.WordGenericV1) []WordBreakdown {
+func FromWordGenericV1(words []WordGenericV1) []WordBreakdown {
 	result := make([]WordBreakdown, 0, len(words))
 	for _, word := range words {
 		result = append(result, WordBreakdown{

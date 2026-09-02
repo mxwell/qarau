@@ -227,13 +227,16 @@ func (c OaiClient) requestWithRetriesV1(
 
 	for attempt := range attempts {
 		savedErr = nil
+		promptStart := time.Now()
 
 		response, err := c.client.Responses.New(requestCtx, body, option.WithMaxRetries(0))
+		promptTime := fmt.Sprintf("%.3f", time.Since(promptStart).Seconds())
 		if response != nil {
 			c.logger.Info(
 				"prompt response - token usage",
 				"input", response.Usage.InputTokens,
 				"output", response.Usage.OutputTokens,
+				"time", promptTime,
 			)
 			usage.Input += response.Usage.InputTokens
 			usage.Output += response.Usage.OutputTokens
@@ -244,6 +247,7 @@ func (c OaiClient) requestWithRetriesV1(
 				"LLM prompt attempt fail",
 				"attempt", attempt+1,
 				"attempts", attempts,
+				"time", promptTime,
 				"err", err,
 			)
 			if attempt+1 < attempts {

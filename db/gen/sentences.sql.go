@@ -9,6 +9,35 @@ import (
 	"context"
 )
 
+const countSentenceBreakdowns = `-- name: CountSentenceBreakdowns :one
+SELECT
+    COUNT(*)
+FROM sentence_breakdowns
+WHERE
+    transcription_id = $1 AND
+    sentence_seq BETWEEN $2 AND $3 AND
+    target_lang = $4
+`
+
+type CountSentenceBreakdownsParams struct {
+	TranscriptionID int64  `json:"transcription_id"`
+	StartSeq        int32  `json:"start_seq"`
+	EndSeq          int32  `json:"end_seq"`
+	TargetLang      string `json:"target_lang"`
+}
+
+func (q *Queries) CountSentenceBreakdowns(ctx context.Context, arg CountSentenceBreakdownsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countSentenceBreakdowns,
+		arg.TranscriptionID,
+		arg.StartSeq,
+		arg.EndSeq,
+		arg.TargetLang,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteSentencesByTranscriptionId = `-- name: DeleteSentencesByTranscriptionId :exec
 DELETE FROM sentences WHERE transcription_id = $1
 `

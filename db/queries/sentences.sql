@@ -65,6 +65,15 @@ WHERE
     target_lang = sqlc.arg('target_lang')
 ORDER BY sentence_seq ASC;
 
+-- name: CountSentenceBreakdowns :one
+SELECT
+    COUNT(*)
+FROM sentence_breakdowns
+WHERE
+    transcription_id = sqlc.arg('transcription_id') AND
+    sentence_seq BETWEEN sqlc.arg('start_seq') AND sqlc.arg('end_seq') AND
+    target_lang = sqlc.arg('target_lang');
+
 -- name: InsertSentenceBreakdown :exec
 -- Only ever called for sentences that have no breakdown yet, so a conflict
 -- means two clients clicked the same position concurrently. Keep the first

@@ -12,13 +12,24 @@ import (
 
 type Querier interface {
 	CheckLease(ctx context.Context, jobID int64) (CheckLeaseRow, error)
+	// Picking up an expired `running` lease is crash recovery: every in-process
+	// error path marks the batch `failed` itself.
+	ClaimBreakdownBatch(ctx context.Context, arg ClaimBreakdownBatchParams) (ClaimBreakdownBatchRow, error)
 	ClaimJob(ctx context.Context, arg ClaimJobParams) (ClaimJobRow, error)
+	// Bound on unfinished work per transcription: a viewer clicking around must
+	// not queue dozens of paid LLM calls.
+	CountActiveBreakdownBatches(ctx context.Context, transcriptionID int64) (int64, error)
+	CountSentenceBreakdowns(ctx context.Context, arg CountSentenceBreakdownsParams) (int64, error)
 	CreateAsrJob(ctx context.Context, fetchJobID int64) (int64, error)
 	CreateAudioBlob(ctx context.Context, arg CreateAudioBlobParams) (int64, error)
 	CreateFetchJobIfAbsent(ctx context.Context, arg CreateFetchJobIfAbsentParams) (int64, error)
 	CreateVideo(ctx context.Context, arg CreateVideoParams) (int64, error)
 	DeleteSentencesByTranscriptionId(ctx context.Context, transcriptionID int64) error
 	DeleteWordsByTranscriptionId(ctx context.Context, transcriptionID int64) error
+	// Insert, or join the existing batch. A `failed` batch goes back to `pending`,
+	// so asking again after a failure is what retries it. Returns the row either
+	// way; the caller reads `state` to decide what to tell the client.
+	EnqueueBreakdownBatch(ctx context.Context, arg EnqueueBreakdownBatchParams) (EnqueueBreakdownBatchRow, error)
 	// The sentence being spoken at start_ms: the last one that has already begun.
 	// Returns no rows when start_ms precedes the first sentence — callers fall back
 	// to GetFirstSentenceSeq.
@@ -27,10 +38,12 @@ type Querier interface {
 	GetAsrJobQueue(ctx context.Context, createdBefore pgtype.Timestamptz) ([]GetAsrJobQueueRow, error)
 	GetAsrQuota(ctx context.Context, day pgtype.Date) (int32, error)
 	GetAudioBlob(ctx context.Context, videoID int64) (GetAudioBlobRow, error)
+	GetBreakdownBatch(ctx context.Context, arg GetBreakdownBatchParams) (GetBreakdownBatchRow, error)
 	GetFetchJobQueue(ctx context.Context, createdBefore pgtype.Timestamptz) ([]GetFetchJobQueueRow, error)
 	GetFirstSentenceSeq(ctx context.Context, transcriptionID int64) (int32, error)
 	GetJob(ctx context.Context, jobID int64) (GetJobRow, error)
 	GetLast24hJobs(ctx context.Context) ([]GetLast24hJobsRow, error)
+	GetLastBreakdownBatches(ctx context.Context, batches int32) ([]GetLastBreakdownBatchesRow, error)
 	GetLastJobs(ctx context.Context, jobs int32) ([]GetLastJobsRow, error)
 	GetLlmQuota(ctx context.Context, day pgtype.Date) (GetLlmQuotaRow, error)
 	// Whatever breakdown exists for these sentences, regardless of which model or
@@ -55,6 +68,10 @@ type Querier interface {
 	InsertSentences(ctx context.Context, arg []InsertSentencesParams) (int64, error)
 	InsertWords(ctx context.Context, arg []InsertWordsParams) (int64, error)
 	ListPlaylists(ctx context.Context, arg ListPlaylistsParams) ([]Playlist, error)
+	MarkBreakdownBatchDone(ctx context.Context, arg MarkBreakdownBatchDoneParams) (int64, error)
+	// Covers both a broken batch and a blocked one (daily LLM quota used up):
+	// either way it stops being claimable until the user asks for it again.
+	MarkBreakdownBatchFailed(ctx context.Context, arg MarkBreakdownBatchFailedParams) (int64, error)
 	MarkJobDone(ctx context.Context, arg MarkJobDoneParams) (int64, error)
 	MarkJobFailed(ctx context.Context, arg MarkJobFailedParams) (int64, error)
 	UnlockJob(ctx context.Context, arg UnlockJobParams) (int64, error)

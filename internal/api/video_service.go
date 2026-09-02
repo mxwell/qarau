@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -13,8 +12,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	dbgen "github.com/mxwell/qarau/db/gen"
-	"github.com/mxwell/qarau/internal/constants"
 	"github.com/mxwell/qarau/internal/llm"
+	"github.com/mxwell/qarau/internal/pg"
 	"github.com/mxwell/qarau/internal/quota"
 	"github.com/mxwell/qarau/internal/subtitles"
 )
@@ -27,12 +26,11 @@ var (
 )
 
 type VideoService struct {
-	log       *slog.Logger
-	queries   *dbgen.Queries
-	pool      *pgxpool.Pool
-	ytClient  *YtClient
-	llmQuota  *quota.LlmQuotaController
-	oaiClient *llm.OaiClient
+	log      *slog.Logger
+	queries  *dbgen.Queries
+	pool     *pgxpool.Pool
+	ytClient *YtClient
+	llmQuota *quota.LlmQuotaController
 }
 
 func NewVideoService(
@@ -41,7 +39,6 @@ func NewVideoService(
 	pool *pgxpool.Pool,
 	ytClient *YtClient,
 	llmQuota *quota.LlmQuotaController,
-	oaiClient *llm.OaiClient,
 ) (*VideoService, error) {
 	if log == nil {
 		return nil, errors.New("nil logger in VideoService creation")
@@ -58,16 +55,12 @@ func NewVideoService(
 	if llmQuota == nil {
 		return nil, errors.New("nil LLM quota controller in VideoService creation")
 	}
-	if oaiClient == nil {
-		return nil, errors.New("nil OpenAI client in VideoService creation")
-	}
 	return &VideoService{
-		log:       log,
-		queries:   queries,
-		pool:      pool,
-		ytClient:  ytClient,
-		llmQuota:  llmQuota,
-		oaiClient: oaiClient,
+		log:      log,
+		queries:  queries,
+		pool:     pool,
+		ytClient: ytClient,
+		llmQuota: llmQuota,
 	}, nil
 }
 
@@ -147,8 +140,8 @@ func (s *VideoService) updateVideo(ctx context.Context, id int64, video *Video) 
 	err := s.queries.UpdateVideo(ctx, dbgen.UpdateVideoParams{
 		Title:           video.Title,
 		ChannelTitle:    video.ChannelTitle,
-		PublishedAt:     NewTimestamptz(video.PublishedAt),
-		Duration:        NewInterval(int64(video.DurationSecs)),
+		PublishedAt:     pg.NewTimestamptz(video.PublishedAt),
+		Duration:        pg.NewInterval(int64(video.DurationSecs)),
 		Views:           video.Views,
 		Likes:           video.Likes,
 		DefaultLang:     &video.DefaultLang,
@@ -214,8 +207,8 @@ func (s *VideoService) ProbeVideo(ctx context.Context, onlineVideoId string, for
 		Title:           video.Title,
 		ChannelID:       video.ChannelID,
 		ChannelTitle:    video.ChannelTitle,
-		PublishedAt:     NewTimestamptz(video.PublishedAt),
-		Duration:        NewInterval(int64(video.DurationSecs)),
+		PublishedAt:     pg.NewTimestamptz(video.PublishedAt),
+		Duration:        pg.NewInterval(int64(video.DurationSecs)),
 		Views:           video.Views,
 		Likes:           video.Likes,
 		DefaultLang:     &video.DefaultLang,
@@ -435,7 +428,7 @@ func (s *VideoService) GetVideoProcess(ctx context.Context, videoID int64) (Vide
 				AsrQuota: quota,
 			}, nil
 		} else if latestJob.State == dbgen.JobStateRunning {
-			createdBefore := NewTimestamptz(time.Now())
+			createdBefore := pg.NewTimestamptz(time.Now())
 			// This Fetch job is already running.
 			// It will need to wait for other ASR jobs once it graduates from Fetch to ASR.
 			queue, err := s.queries.GetAsrJobQueue(ctx, createdBefore)
@@ -507,7 +500,7 @@ func (s *VideoService) createVideoProcess(ctx context.Context, videoID int64) (V
 		return VideoProcess{}, ErrUnprocessableVideo
 	}
 
-	enqueued, err := s.queries.GetFetchJobQueue(ctx, NewTimestamptz(time.Now()))
+	enqueued, err := s.queries.GetFetchJobQueue(ctx, pg.NewTimestamptz(time.Now()))
 	enqueuedSize := len(enqueued)
 	if enqueuedSize >= maxQueueSize {
 		s.log.Error("max processing queue size reached", "size", enqueuedSize)
@@ -673,26 +666,54 @@ func (s *VideoService) FindSentenceSeqByStartMs(
 	return seq, err
 }
 
-func (s *VideoService) joinSentenceBreakdowns(sentences []dbgen.GetSentencesRangeRow, breakdowns []BreakdownContent) []SentBreakdown {
+// Return availability, error
+func (s *VideoService) checkLlmQuotaAvailable(ctx context.Context) (bool, error) {
+	today := quota.GetTodayForQuota()
+	llmQuotum, err := s.queries.GetLlmQuota(ctx, today)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			llmQuotum = dbgen.GetLlmQuotaRow{
+				UsedInputTokens:  0,
+				UsedOutputTokens: 0,
+			}
+		} else {
+			return false, err
+		}
+	}
+	quotaOk, quotaStatus := s.llmQuota.Available(
+		llmQuotum.UsedInputTokens,
+		llmQuotum.UsedOutputTokens,
+	)
+	if !quotaOk {
+		s.log.Info("daily llm quota used up", "status", quotaStatus)
+		return false, nil
+	}
+	return true, nil
+}
+
+func (s *VideoService) joinSentenceBreakdowns(
+	sentences []dbgen.GetSentencesRangeRow,
+	breakdowns []llm.BreakdownContent,
+) []llm.SentBreakdown {
 	i := 0
 	n := len(sentences)
-	result := make([]SentBreakdown, 0)
+	result := make([]llm.SentBreakdown, 0)
 	for j := range breakdowns {
 		if i >= n {
 			break
 		}
-		seq := breakdowns[j].seq
+		seq := breakdowns[j].Seq
 		for i < n && sentences[i].Seq < seq {
 			i++
 		}
 		if i < n && sentences[i].Seq == seq {
-			result = append(result, SentBreakdown{
+			result = append(result, llm.SentBreakdown{
 				Seq:          seq,
 				StartMs:      sentences[i].StartMs,
 				EndMs:        sentences[i].EndMs,
 				Text:         sentences[i].Text,
-				Translations: breakdowns[j].translations,
-				Words:        breakdowns[j].words,
+				Translations: breakdowns[j].Translations,
+				Words:        breakdowns[j].Words,
 			})
 		}
 	}
@@ -704,127 +725,35 @@ func (s *VideoService) joinSentenceBreakdowns(sentences []dbgen.GetSentencesRang
 	return result
 }
 
-func (s *VideoService) insertBreakdowns(
-	ctx context.Context,
-	transcriptionID int64,
-	targetLang string,
-	batch []dbgen.GetSentencesRangeRow,
-	breakdownResult llm.SentenceBreakdownResult,
-) ([]SentBreakdown, error) {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback(ctx) // safe even after tx.Commit() -- does nothing
-
-	qtx := s.queries.WithTx(tx)
-
-	inserted := make([]SentBreakdown, 0)
-	for i, breakdown := range breakdownResult.Sentences {
-		seq := batch[i].Seq
-		if breakdown.Sentence == "" {
-			s.log.Warn("empty sentence breakdown from LLM", "seq", seq, "sentence", batch[i].Text, "transcriptionID", transcriptionID)
-			continue
-		}
-
-		plainTranslations := PlainTranslations{
-			Variants: breakdown.Translations,
-		}
-
-		translationBytes, err := json.Marshal(plainTranslations)
-		if err != nil {
-			s.log.Error("failed to marshal translations in sentence breakdown", "seq", seq, "translations", len(plainTranslations.Variants))
-			continue
-		}
-
-		wordBreakdownItems := FromWordGenericV1(breakdown.Breakdown)
-		plainBreakdown := PlainBreakdown{
-			Words: wordBreakdownItems,
-		}
-
-		breakdownBytes, err := json.Marshal(plainBreakdown)
-		if err != nil {
-			s.log.Error("failed to marshal words in sentence breakdown", "seq", seq, "words", len(plainBreakdown.Words))
-			continue
-		}
-
-		err = qtx.InsertSentenceBreakdown(ctx, dbgen.InsertSentenceBreakdownParams{
-			TranscriptionID: transcriptionID,
-			SentenceSeq:     seq,
-			TargetLang:      targetLang,
-			Model:           breakdownResult.Metadata.Model,
-			PromptVersion:   int32(breakdownResult.Metadata.PromptVersion),
-			Translations:    translationBytes,
-			Breakdown:       breakdownBytes,
-		})
-		if err != nil {
-			s.log.Error("failed to insert generated sent breakdown", "transcriptionID", transcriptionID, "seq", seq, "err", err)
-			return nil, fmt.Errorf("breakdown insert fail: %w", err)
-		}
-		inserted = append(inserted, SentBreakdown{
-			Seq:          seq,
-			StartMs:      batch[i].StartMs,
-			EndMs:        batch[i].EndMs,
-			Text:         batch[i].Text,
-			Translations: breakdown.Translations,
-			Words:        wordBreakdownItems,
-		})
-	}
-	if len(inserted) == 0 {
-		s.log.Error("none of generated breakdowns inserted", "transcriptionID", transcriptionID, "breakdowns", len(breakdownResult.Sentences))
-		return nil, errors.New("none of generated breakdowns inserted")
-	}
-	s.log.Info("inserted generated sent breakdowns", "transcriptionID", transcriptionID, "total", len(batch), "inserted", len(inserted))
-	return inserted, tx.Commit(ctx)
-}
-
 type GetBreakdownsResponse struct {
-	Ok         bool            `json:"ok"`
-	Breakdowns []SentBreakdown `json:"breakdowns"`
-	Message    string          `json:"message"`
+	Ok         bool                `json:"ok"`
+	Breakdowns []llm.SentBreakdown `json:"breakdowns"`
+	Message    string              `json:"message"`
 
 	// batch boundaries
-	StartMs int32 `json:"start_ms"`
-	EndMs   int32 `json:"end_ms"`
+	StartMs    int32 `json:"start_ms"`
+	EndMs      int32 `json:"end_ms"`
+	BatchStart int32 `json:"batch_start"`
 }
 
-// Steps:
-// - get the batch boundaries
-// - check if breakdowns exist in DB => return if yes
-// - check LLM quota
-// - send batch to LLM
-// - update LLM quota
-// - store to DB
-// - return newly generated breakdowns
-//
-// Return one of:
-// - 'breakdown fail' if sentences are loaded, but failed to generate breakdowns
-// - 'no sentences' if sentence query returned an empty set
-// - 'no quota' if LLM quota is used up for today
 func (s *VideoService) GetBreakdowns(ctx context.Context, transcriptionID int64, targetLang string, sentSeq int32) (GetBreakdownsResponse, error) {
-	batchStart := (sentSeq / constants.SentenceBatchSize) * constants.SentenceBatchSize
-
-	batch, err := s.queries.GetSentencesRange(ctx, dbgen.GetSentencesRangeParams{
-		TranscriptionID: transcriptionID,
-		StartSeq:        batchStart,
-		EndSeq:          batchStart + constants.SentenceBatchSize - 1, // inclusive
-	})
+	batch, batchStart, err := llm.GetBatchBoundariesAndContent(
+		ctx,
+		s.queries,
+		s.log,
+		transcriptionID,
+		sentSeq,
+	)
 	if err != nil {
-		s.log.Error(
-			"sentence batch load fail",
-			"transcriptionID", transcriptionID,
-			"batchStart", batchStart,
-			"err", err,
-		)
 		return GetBreakdownsResponse{}, err
 	}
 	if len(batch) == 0 {
-		s.log.Info("no sents found", "transcriptionID", transcriptionID, "batchStart", batchStart)
 		return GetBreakdownsResponse{
 			Ok:      false,
 			Message: "sentences not found",
 		}, nil
 	}
+
 	// inclusive
 	batchEnd := batchStart + int32(len(batch)) - 1
 	batchStartMs := batch[0].StartMs
@@ -854,7 +783,7 @@ func (s *VideoService) GetBreakdowns(ctx context.Context, transcriptionID int64,
 	}
 	// return if we have any batch coverage, even with gaps
 	if len(dbBreakdowns) > 0 {
-		breakdownContent, err := toBreakdownContent(dbBreakdowns)
+		breakdownContent, err := llm.ToBreakdownContent(dbBreakdowns)
 		if err != nil {
 			return GetBreakdownsResponse{}, fmt.Errorf("existing breakdown load fail: %w", err)
 		}
@@ -865,93 +794,173 @@ func (s *VideoService) GetBreakdowns(ctx context.Context, transcriptionID int64,
 			Message:    "",
 			StartMs:    batchStartMs,
 			EndMs:      batchEndMs,
+			BatchStart: batchStart,
 		}, nil
 	}
 
-	// check quota before LLM request
-	today := quota.GetTodayForQuota()
-	llmQuotum, err := s.queries.GetLlmQuota(ctx, today)
+	batchRow, err := s.queries.GetBreakdownBatch(ctx, dbgen.GetBreakdownBatchParams{
+		TranscriptionID: transcriptionID,
+		BatchStartSeq:   batchStart,
+		TargetLang:      targetLang,
+	})
+	message := "breakdowns missing"
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			llmQuotum = dbgen.GetLlmQuotaRow{
-				UsedInputTokens:  0,
-				UsedOutputTokens: 0,
-			}
-		} else {
+		if !errors.Is(err, pgx.ErrNoRows) {
 			return GetBreakdownsResponse{}, err
 		}
-	}
-	quotaOk, quotaStatus := s.llmQuota.Available(
-		llmQuotum.UsedInputTokens,
-		llmQuotum.UsedOutputTokens,
-	)
-	if !quotaOk {
-		s.log.Info("daily llm quota used up", "status", quotaStatus, "transcriptionID", transcriptionID)
-		return GetBreakdownsResponse{
-			Ok:      false,
-			Message: "daily LLM quota used up",
-		}, nil
-	}
-
-	sentences := make([]string, 0, len(batch))
-	for i := range batch {
-		sentences = append(sentences, batch[i].Text)
-	}
-	videoDetails, err := s.queries.GetVideoByTranscriptionID(ctx, transcriptionID)
-	if err != nil {
-		s.log.Error("video details load fail", "err", err, "transcriptionID", transcriptionID)
-		return GetBreakdownsResponse{}, fmt.Errorf("failed to load video details for breakdown: %w", err)
-	}
-	breakdownResult, err := s.oaiClient.DoSentenceBreakdown(
-		ctx,
-		targetLang,
-		videoDetails.Title,
-		videoDetails.ChannelTitle,
-		sentences,
-	)
-	if breakdownResult.Usage.Input > 0 || breakdownResult.Usage.Output > 0 {
-		row, quotaErr := s.queries.UpsertLlmQuota(ctx, dbgen.UpsertLlmQuotaParams{
-			Day:              today,
-			UsedInputTokens:  breakdownResult.Usage.Input,
-			UsedOutputTokens: breakdownResult.Usage.Output,
-		})
-		if quotaErr != nil {
-			s.log.Error("llm quota upsert failed", "err", quotaErr)
-			err = errors.Join(err, quotaErr)
-		} else {
-			s.log.Info(
-				"llm quota daily usage bumped",
-				"input", row.UsedInputTokens,
-				"output", row.UsedOutputTokens,
-			)
+	} else {
+		switch batchRow.State {
+		case dbgen.BatchStatePending, dbgen.BatchStateRunning:
+			message = "breakdowns pending"
+		case dbgen.BatchStateDone:
+			message = "breakdowns done"
+		case dbgen.BatchStateFailed:
+			// leave the message "breakdowns missing" - POST will reset the batch
 		}
-	}
-	if err != nil {
-		s.log.Error("breakdown generation failed", "transcriptionID", transcriptionID, "err", err)
-		return GetBreakdownsResponse{
-			Ok:      false,
-			Message: "breakdown generation failed",
-			StartMs: batchStartMs,
-			EndMs:   batchEndMs,
-		}, nil
-	}
-
-	sentBreakdownItems, err := s.insertBreakdowns(
-		ctx,
-		transcriptionID,
-		targetLang,
-		batch,
-		breakdownResult,
-	)
-	if err != nil {
-		return GetBreakdownsResponse{}, err
 	}
 
 	return GetBreakdownsResponse{
-		Ok:         true,
-		Breakdowns: sentBreakdownItems,
+		Ok:         false,
+		Message:    message,
 		StartMs:    batchStartMs,
 		EndMs:      batchEndMs,
+		BatchStart: batchStart,
+	}, nil
+}
+
+type EnqueueBreakdownsResponse struct {
+	ProceedToPolling bool   `json:"proceed_to_polling"`
+	Message          string `json:"message"`
+}
+
+// Enqueue a new breakdown batch
+//
+// Steps:
+// - get the batch boundaries
+// - check if breakdowns exist in DB => return early if yes
+// - check if batch exists in DB => return early if yes
+// - check LLM quota => return early if no quota
+// - create/update a batch in DB
+//
+// Return one of:
+// - 'no sentences found' if sentence query returned an empty set
+// - 'no quota' if LLM quota is used up for today
+// - 'pending' or 'running' for corresponding batch state if it exists already
+// - 'queue full'
+// - empty = 'done' (no need to send results => delegate to GET /breakdowns)
+func (s *VideoService) EnqueueBreakdowns(
+	ctx context.Context,
+	transcriptionID int64,
+	targetLang string,
+	sentSeq int32,
+) (EnqueueBreakdownsResponse, error) {
+	batch, batchStart, err := llm.GetBatchBoundariesAndContent(
+		ctx,
+		s.queries,
+		s.log,
+		transcriptionID,
+		sentSeq,
+	)
+	if err != nil {
+		return EnqueueBreakdownsResponse{}, err
+	}
+	if len(batch) == 0 {
+		return EnqueueBreakdownsResponse{
+			ProceedToPolling: false,
+			Message:          "no sentences found",
+		}, nil
+	}
+
+	// inclusive
+	batchEnd := batchStart + int32(len(batch)) - 1
+	batchStartMs := batch[0].StartMs
+	batchEndMs := batch[len(batch)-1].EndMs
+	s.log.Info(
+		"loaded sent batch",
+		"transcription", transcriptionID,
+		"start", batchStart,
+		"end", batchEnd,
+		"start_ms", batchStartMs,
+		"end_ms", batchEndMs,
+	)
+
+	breakdownCount, err := s.queries.CountSentenceBreakdowns(ctx, dbgen.CountSentenceBreakdownsParams{
+		TranscriptionID: transcriptionID,
+		StartSeq:        batchStart,
+		EndSeq:          batchEnd,
+		TargetLang:      targetLang,
+	})
+	if err != nil {
+		return EnqueueBreakdownsResponse{}, err
+	}
+	if breakdownCount > 0 {
+		s.log.Info(
+			"sent breakdown exist",
+			"transcription", transcriptionID,
+			"lang", targetLang,
+			"count", breakdownCount,
+		)
+		return EnqueueBreakdownsResponse{
+			ProceedToPolling: true,
+		}, nil
+	}
+
+	batchRow, err := s.queries.GetBreakdownBatch(ctx, dbgen.GetBreakdownBatchParams{
+		TranscriptionID: transcriptionID,
+		BatchStartSeq:   batchStart,
+		TargetLang:      targetLang,
+	})
+	if err == nil {
+		if batchRow.State != dbgen.BatchStateFailed {
+			s.log.Info("non-failed batch exists", "batch", batchRow.ID, "state", batchRow.State)
+			return EnqueueBreakdownsResponse{
+				ProceedToPolling: true,
+			}, nil
+		}
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return EnqueueBreakdownsResponse{}, err
+	}
+
+	// Two options at this point:
+	// - no batch exists in DB
+	// - failed batch in DB
+
+	// check quota before batch enqueueing
+	quotaOk, err := s.checkLlmQuotaAvailable(ctx)
+	if err != nil {
+		return EnqueueBreakdownsResponse{}, err
+	}
+	if !quotaOk {
+		return EnqueueBreakdownsResponse{
+			ProceedToPolling: false,
+			Message:          "no quota",
+		}, nil
+	}
+
+	active, err := s.queries.CountActiveBreakdownBatches(ctx, transcriptionID)
+	if err != nil {
+		return EnqueueBreakdownsResponse{}, err
+	}
+	if active >= 3 {
+		s.log.Info("too many active batches", "transcription", transcriptionID, "active", active)
+		return EnqueueBreakdownsResponse{
+			ProceedToPolling: false,
+			Message:          "queue full",
+		}, nil
+	}
+
+	enqueued, err := s.queries.EnqueueBreakdownBatch(ctx, dbgen.EnqueueBreakdownBatchParams{
+		TranscriptionID: transcriptionID,
+		BatchStartSeq:   batchStart,
+		TargetLang:      targetLang,
+	})
+	if err != nil {
+		s.log.Error("failed to enqueue breakdown batch", "transcription", transcriptionID, "err", err)
+		return EnqueueBreakdownsResponse{}, err
+	}
+	s.log.Info("enqueued breakdown batch", "transcription", transcriptionID, "state", enqueued.State)
+	return EnqueueBreakdownsResponse{
+		ProceedToPolling: true,
 	}, nil
 }
 

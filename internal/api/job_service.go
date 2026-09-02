@@ -12,6 +12,7 @@ import (
 	dbgen "github.com/mxwell/qarau/db/gen"
 	qarauv1 "github.com/mxwell/qarau/gen/qarau/v1"
 	"github.com/mxwell/qarau/internal/constants"
+	"github.com/mxwell/qarau/internal/pg"
 	"github.com/mxwell/qarau/internal/quota"
 )
 
@@ -107,7 +108,7 @@ func (s *JobService) LeaseJob(ctx context.Context, workerID string, request *qar
 		}
 	}
 
-	lockedUntil := NewTimestamptz(time.Now().Add(lockPeriod))
+	lockedUntil := pg.NewTimestamptz(time.Now().Add(lockPeriod))
 	arg := dbgen.ClaimJobParams{
 		LockedBy:    &workerID,
 		LockedUntil: lockedUntil,
