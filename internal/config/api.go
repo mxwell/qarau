@@ -22,6 +22,7 @@ type APIConfig struct {
 	YTApiKey    string
 	AdminToken  string
 	LlmApiKey   string
+	LlmPrompt   uint
 	LlmInPrice  string
 	LlmOutPrice string
 	LlmDaily    string
@@ -44,6 +45,7 @@ func LoadAPI() (APIConfig, error) {
 	v.SetDefault("MTLS_KEY", "certs/api.key")
 	v.SetDefault("REST_PORT", 7992)
 	v.SetDefault("GRACE_PERIOD", "3s")
+	v.SetDefault("LLM_PROMPT", 1)
 	v.SetDefault("LLM_DAILY", "0")
 	v.SetDefault("LOG_DIR", "logs")
 	v.SetDefault("LOG_LEVEL", "INFO")
@@ -68,6 +70,7 @@ func LoadAPI() (APIConfig, error) {
 		YTApiKey:    v.GetString("YT_API_KEY"),
 		AdminToken:  v.GetString("ADMIN_TOKEN"),
 		LlmApiKey:   v.GetString("LLM_API_KEY"),
+		LlmPrompt:   v.GetUint("LLM_PROMPT"),
 		LlmInPrice:  v.GetString("LLM_INPUT_PRICE"),
 		LlmOutPrice: v.GetString("LLM_OUTPUT_PRICE"),
 		LlmDaily:    v.GetString("LLM_DAILY"),

@@ -196,7 +196,14 @@ func run() error {
 		logger.Error("failed to create OpenAI client", "err", err)
 		return err
 	}
-	bbRunner, err := llm.NewBBRunner(logger, queries, db, llmQuotaCtl, oaiClient)
+	bbRunner, err := llm.NewBBRunner(
+		logger,
+		queries,
+		db,
+		llmQuotaCtl,
+		oaiClient,
+		cfg.LlmPrompt,
+	)
 	if err != nil {
 		logger.Error("failed to create BBRunner", "err", err)
 		return err

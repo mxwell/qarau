@@ -12,6 +12,7 @@
 .env.*
 .asr.env
 .fetch.env
+.llm.env
 
 # mTLS
 /certs/

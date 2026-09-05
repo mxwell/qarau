@@ -362,8 +362,13 @@ func (s *VideoService) loadLlmQuota(ctx context.Context) (QuotaStatus, error) {
 		return QuotaStatus{}, err
 	}
 	return QuotaStatus{
-		Day:         quota.PrintQuotaDate(today),
-		UsedPercent: s.llmQuota.CalculateUsedPercent(row.UsedInputTokens, row.UsedOutputTokens),
+		Day: quota.PrintQuotaDate(today),
+		UsedPercent: s.llmQuota.CalculateUsedPercent(
+			quota.TokenUsage{
+				Input:  row.UsedInputTokens,
+				Output: row.UsedOutputTokens,
+			},
+		),
 	}, nil
 }
 
@@ -681,8 +686,10 @@ func (s *VideoService) checkLlmQuotaAvailable(ctx context.Context) (bool, error)
 		}
 	}
 	quotaOk, quotaStatus := s.llmQuota.Available(
-		llmQuotum.UsedInputTokens,
-		llmQuotum.UsedOutputTokens,
+		quota.TokenUsage{
+			Input:  llmQuotum.UsedInputTokens,
+			Output: llmQuotum.UsedOutputTokens,
+		},
 	)
 	if !quotaOk {
 		s.log.Info("daily llm quota used up", "status", quotaStatus)

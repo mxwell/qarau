@@ -35,6 +35,7 @@ type BBRunner struct {
 	pool      *pgxpool.Pool
 	llmQuota  *quota.LlmQuotaController
 	oaiClient *OaiClient
+	prompt    uint
 }
 
 func NewBBRunner(
@@ -43,6 +44,7 @@ func NewBBRunner(
 	pool *pgxpool.Pool,
 	llmQuota *quota.LlmQuotaController,
 	oaiClient *OaiClient,
+	prompt uint,
 ) (*BBRunner, error) {
 	if logger == nil {
 		return nil, errors.New("nil logger in BBRunner creation")
@@ -66,6 +68,7 @@ func NewBBRunner(
 		pool:      pool,
 		llmQuota:  llmQuota,
 		oaiClient: oaiClient,
+		prompt:    prompt,
 	}, nil
 }
 
@@ -83,8 +86,10 @@ func (r *BBRunner) checkLlmQuotaAvailable(ctx context.Context) (bool, error) {
 		}
 	}
 	quotaOk, quotaStatus := r.llmQuota.Available(
-		llmQuotum.UsedInputTokens,
-		llmQuotum.UsedOutputTokens,
+		quota.TokenUsage{
+			Input:  llmQuotum.UsedInputTokens,
+			Output: llmQuotum.UsedOutputTokens,
+		},
 	)
 	if !quotaOk {
 		r.logger.Info("daily llm quota used up", "status", quotaStatus)
@@ -243,6 +248,7 @@ func (r *BBRunner) process(
 		targetLang,
 		videoDetails.Title,
 		videoDetails.ChannelTitle,
+		r.prompt,
 		sentences,
 	)
 	if breakdownResult.Usage.Input > 0 || breakdownResult.Usage.Output > 0 {

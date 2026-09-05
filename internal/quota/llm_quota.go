@@ -12,6 +12,11 @@ type LlmQuotaController struct {
 	dailyAllowance      float64
 }
 
+type TokenUsage struct {
+	Input  int64
+	Output int64
+}
+
 func NewLlmQuotaController(inputPrice, outputPrice, daily string) (*LlmQuotaController, error) {
 	const (
 		minPrice     = 1e-6
@@ -51,22 +56,22 @@ func NewLlmQuotaController(inputPrice, outputPrice, daily string) (*LlmQuotaCont
 	}, nil
 }
 
-func (c LlmQuotaController) calcUse(inputTokens, outputTokens int64) float64 {
-	input := math.Max(0, float64(inputTokens))
-	output := math.Max(0, float64(outputTokens))
+func (c LlmQuotaController) CalculateCost(usage TokenUsage) float64 {
+	input := math.Max(0, float64(usage.Input))
+	output := math.Max(0, float64(usage.Output))
 	use := c.inputPricePer1MTok*input + c.outputPricePer1MTok*output
 	return use / 1e6
 }
 
-func (c LlmQuotaController) Available(inputTokens, outputTokens int64) (bool, string) {
-	use := c.calcUse(inputTokens, outputTokens)
+func (c LlmQuotaController) Available(usage TokenUsage) (bool, string) {
+	use := c.CalculateCost(usage)
 	status := fmt.Sprintf("%.3f out of %.3f", use, c.dailyAllowance)
 	result := use < c.dailyAllowance-1e-6
 	return result, status
 }
 
-func (c LlmQuotaController) CalculateUsedPercent(inputTokens, outputTokens int64) int16 {
-	use := c.calcUse(inputTokens, outputTokens)
+func (c LlmQuotaController) CalculateUsedPercent(usage TokenUsage) int16 {
+	use := c.CalculateCost(usage)
 	if use > c.dailyAllowance-1e-6 {
 		return 100
 	}

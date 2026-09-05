@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/invopop/jsonschema"
+	"github.com/mxwell/qarau/internal/quota"
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/packages/param"
@@ -26,7 +27,6 @@ const (
 	placeholderSubtitles    = "{{SUBTITLES}}"
 
 	LangRu            = "ru"
-	PromptVersion     = 1
 	modelForBreakdown = openai.ChatModelGPT5_6Luna
 	maxOutputTokens   = 32768
 	promptAttempts    = 3
@@ -76,14 +76,14 @@ func New(logger *slog.Logger, apiKey string) (*OaiClient, error) {
 //go:embed prompts/*.md
 var promptFiles embed.FS
 
-func promptTemplateName(name string, targetLang string, ver int) string {
-	return name + "." + targetLang + ".v" + strconv.Itoa(ver) + ".md"
+func promptTemplateName(name string, targetLang string, ver uint) string {
+	return name + "." + targetLang + ".v" + fmt.Sprint(ver) + ".md"
 }
 
 func (c OaiClient) buildPrompt(
 	name string,
 	targetLang string,
-	ver int,
+	ver uint,
 	title, channel string,
 	sentences []string,
 ) (string, error) {
@@ -154,11 +154,6 @@ type ResponseRuV1 struct {
 	Sentences []SentenceBreakdownRuV1 `json:"sentences" jsonschema_description:"A list of sentences with translations and linguistic breakdown."`
 }
 
-type TokenUsage struct {
-	Input  int64
-	Output int64
-}
-
 // Put breakdowns in the right positions according to sentence_num.
 // If some position is empty, then its 'text' should be left empty.
 func (c OaiClient) arrangeAndConvert(sentenceCount int, sents []SentenceBreakdownRuV1) ([]SentenceBreakdownGenericV1, error) {
@@ -219,9 +214,9 @@ func (c OaiClient) requestWithRetriesV1(
 	sentenceCount int,
 	body responses.ResponseNewParams,
 	attempts int,
-) ([]SentenceBreakdownGenericV1, TokenUsage, error) {
+) ([]SentenceBreakdownGenericV1, quota.TokenUsage, error) {
 	var savedErr error
-	usage := TokenUsage{}
+	usage := quota.TokenUsage{}
 	requestCtx, cancel := context.WithTimeout(ctx, promptTimeout)
 	defer cancel()
 
@@ -236,6 +231,7 @@ func (c OaiClient) requestWithRetriesV1(
 				"prompt response - token usage",
 				"input", response.Usage.InputTokens,
 				"output", response.Usage.OutputTokens,
+				"reasoning", response.Usage.OutputTokensDetails.ReasoningTokens,
 				"time", promptTime,
 			)
 			usage.Input += response.Usage.InputTokens
@@ -290,9 +286,14 @@ func (c OaiClient) requestWithRetriesV1(
 	)
 }
 
-func (c OaiClient) doSentenceBreakdownRuV1(ctx context.Context, title, channel string, sentences []string) ([]SentenceBreakdownGenericV1, TokenUsage, error) {
-	usage := TokenUsage{}
-	prompt, err := c.buildPrompt("grammar_breakdown", LangRu, PromptVersion, title, channel, sentences)
+func (c OaiClient) doSentenceBreakdownRuV1(
+	ctx context.Context,
+	title, channel string,
+	promptVersion uint,
+	sentences []string,
+) ([]SentenceBreakdownGenericV1, quota.TokenUsage, error) {
+	usage := quota.TokenUsage{}
+	prompt, err := c.buildPrompt("grammar_breakdown", LangRu, promptVersion, title, channel, sentences)
 	if err != nil {
 		return nil, usage, fmt.Errorf("sentence breakdown fail: %w", err)
 	}
@@ -341,30 +342,38 @@ func wordRuV1ToGeneric(words []WordRuV1) []WordGenericV1 {
 
 type BreakdownMetadata struct {
 	Model         string
-	PromptVersion int
+	PromptVersion uint
 }
 
 var (
-	curBreakdownMetadata = BreakdownMetadata{
-		Model:         modelForBreakdown,
-		PromptVersion: PromptVersion,
-	}
-	zeroUsage = TokenUsage{}
+	zeroUsage = quota.TokenUsage{}
 )
 
 type SentenceBreakdownResult struct {
 	Metadata  BreakdownMetadata
-	Usage     TokenUsage
+	Usage     quota.TokenUsage
 	Sentences []SentenceBreakdownGenericV1
 }
 
-func (c OaiClient) DoSentenceBreakdown(ctx context.Context, targetLang, title, channel string, sentences []string) (SentenceBreakdownResult, error) {
+func (c OaiClient) DoSentenceBreakdown(
+	ctx context.Context,
+	targetLang, title, channel string,
+	promptVersion uint,
+	sentences []string,
+) (SentenceBreakdownResult, error) {
 	if targetLang == LangRu {
-		generic, usage, err := c.doSentenceBreakdownRuV1(ctx, title, channel, sentences)
+		generic, usage, err := c.doSentenceBreakdownRuV1(ctx, title, channel, promptVersion, sentences)
 		if err != nil {
 			return SentenceBreakdownResult{Usage: usage}, err
 		}
-		return SentenceBreakdownResult{curBreakdownMetadata, usage, generic}, nil
+		return SentenceBreakdownResult{
+			Metadata: BreakdownMetadata{
+				Model:         modelForBreakdown,
+				PromptVersion: promptVersion,
+			},
+			Usage:     usage,
+			Sentences: generic,
+		}, nil
 	} else {
 		return SentenceBreakdownResult{Usage: zeroUsage}, fmt.Errorf("sentence breakdown is not implemented for targetLang %s", targetLang)
 	}
