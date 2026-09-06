@@ -29,6 +29,20 @@ type OutputJson struct {
 	Sentences []SentenceOutput `json:"sentences"`
 }
 
+func printStreamedSentence(sent llm.StreamedSentence) {
+	translation := ""
+	if len(sent.Sentence.Translations) > 0 {
+		translation = sent.Sentence.Translations[0]
+	}
+	fmt.Printf(
+		"[+%7.3fs] sentence %d (%d words): %s\n",
+		sent.Elapsed.Seconds(),
+		sent.SentenceNum,
+		len(sent.Sentence.Breakdown),
+		translation,
+	)
+}
+
 func run() error {
 	var (
 		promptVersion  = flag.Uint("prompt", 1, "prompt version")
@@ -36,6 +50,7 @@ func run() error {
 		inputJsonPath  = flag.String("input", "", "input JSON file path")
 		sentenceLimit  = flag.Int("sentences", -1, "how many sentences to use from input")
 		outputJsonPath = flag.String("output", "", "output JSON file path")
+		streamMode     = flag.Bool("stream", false, "stream the response, printing sentences as they arrive")
 		inputJson      InputJson
 	)
 	flag.Parse()
@@ -105,14 +120,28 @@ func run() error {
 		sentences = sentences[:*sentenceLimit]
 	}
 
-	result, err := client.DoSentenceBreakdown(
-		context.Background(),
-		*targetLang,
-		inputJson.VideoTitle,
-		inputJson.ChannelTitle,
-		*promptVersion,
-		sentences,
-	)
+	var result llm.SentenceBreakdownResult
+	if *streamMode {
+		fmt.Printf("streaming breakdown of %d sentences...\n", len(sentences))
+		result, err = client.DoSentenceBreakdownStream(
+			context.Background(),
+			*targetLang,
+			inputJson.VideoTitle,
+			inputJson.ChannelTitle,
+			*promptVersion,
+			sentences,
+			printStreamedSentence,
+		)
+	} else {
+		result, err = client.DoSentenceBreakdown(
+			context.Background(),
+			*targetLang,
+			inputJson.VideoTitle,
+			inputJson.ChannelTitle,
+			*promptVersion,
+			sentences,
+		)
+	}
 	if err != nil {
 		return fmt.Errorf("sentence breakdown fail: %w", err)
 	}

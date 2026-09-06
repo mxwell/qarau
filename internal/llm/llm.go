@@ -286,19 +286,20 @@ func (c OaiClient) requestWithRetriesV1(
 	)
 }
 
-func (c OaiClient) doSentenceBreakdownRuV1(
-	ctx context.Context,
+// shared between blocking and streaming request paths
+func (c OaiClient) buildBreakdownBodyRuV1(
 	title, channel string,
 	promptVersion uint,
 	sentences []string,
-) ([]SentenceBreakdownGenericV1, quota.TokenUsage, error) {
-	usage := quota.TokenUsage{}
+) (responses.ResponseNewParams, error) {
+	var body responses.ResponseNewParams
+
 	prompt, err := c.buildPrompt("grammar_breakdown", LangRu, promptVersion, title, channel, sentences)
 	if err != nil {
-		return nil, usage, fmt.Errorf("sentence breakdown fail: %w", err)
+		return body, fmt.Errorf("sentence breakdown fail: %w", err)
 	}
 	if len(prompt) == 0 {
-		return nil, usage, errors.New("empty prompt")
+		return body, errors.New("empty prompt")
 	}
 
 	model := modelForBreakdown
@@ -311,7 +312,7 @@ func (c OaiClient) doSentenceBreakdownRuV1(
 	)
 	format.OfJSONSchema.Strict = param.NewOpt(true)
 
-	body := responses.ResponseNewParams{
+	return responses.ResponseNewParams{
 		Model:           model,
 		MaxOutputTokens: param.NewOpt[int64](maxOutputTokens),
 		Input: responses.ResponseNewParamsInputUnion{
@@ -320,6 +321,18 @@ func (c OaiClient) doSentenceBreakdownRuV1(
 		Text: responses.ResponseTextConfigParam{
 			Format: format,
 		},
+	}, nil
+}
+
+func (c OaiClient) doSentenceBreakdownRuV1(
+	ctx context.Context,
+	title, channel string,
+	promptVersion uint,
+	sentences []string,
+) ([]SentenceBreakdownGenericV1, quota.TokenUsage, error) {
+	body, err := c.buildBreakdownBodyRuV1(title, channel, promptVersion, sentences)
+	if err != nil {
+		return nil, zeroUsage, err
 	}
 
 	return c.requestWithRetriesV1(ctx, len(sentences), body, promptAttempts)
