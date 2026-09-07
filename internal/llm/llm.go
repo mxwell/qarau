@@ -167,6 +167,7 @@ func (c OaiClient) arrangeAndConvert(sentenceCount int, sents []SentenceBreakdow
 		}
 		if result[pos].Sentence != "" {
 			c.logger.Warn("duplicate sentence in LLM output", "pos", pos, "prev", result[pos].Sentence, "cur", sent.Sentence)
+			continue
 		} else {
 			vacant--
 		}
@@ -291,15 +292,15 @@ func (c OaiClient) buildBreakdownBodyRuV1(
 	title, channel string,
 	promptVersion uint,
 	sentences []string,
-) (responses.ResponseNewParams, error) {
+) (responses.ResponseNewParams, BreakdownMetadata, error) {
 	var body responses.ResponseNewParams
 
 	prompt, err := c.buildPrompt("grammar_breakdown", LangRu, promptVersion, title, channel, sentences)
 	if err != nil {
-		return body, fmt.Errorf("sentence breakdown fail: %w", err)
+		return body, BreakdownMetadata{}, fmt.Errorf("sentence breakdown fail: %w", err)
 	}
 	if len(prompt) == 0 {
-		return body, errors.New("empty prompt")
+		return body, BreakdownMetadata{}, errors.New("empty prompt")
 	}
 
 	model := modelForBreakdown
@@ -321,6 +322,9 @@ func (c OaiClient) buildBreakdownBodyRuV1(
 		Text: responses.ResponseTextConfigParam{
 			Format: format,
 		},
+	}, BreakdownMetadata{
+		Model:         model,
+		PromptVersion: promptVersion,
 	}, nil
 }
 
@@ -329,13 +333,14 @@ func (c OaiClient) doSentenceBreakdownRuV1(
 	title, channel string,
 	promptVersion uint,
 	sentences []string,
-) ([]SentenceBreakdownGenericV1, quota.TokenUsage, error) {
-	body, err := c.buildBreakdownBodyRuV1(title, channel, promptVersion, sentences)
+) ([]SentenceBreakdownGenericV1, BreakdownMetadata, quota.TokenUsage, error) {
+	body, metadata, err := c.buildBreakdownBodyRuV1(title, channel, promptVersion, sentences)
 	if err != nil {
-		return nil, zeroUsage, err
+		return nil, metadata, zeroUsage, err
 	}
 
-	return c.requestWithRetriesV1(ctx, len(sentences), body, promptAttempts)
+	breakdown, usage, err := c.requestWithRetriesV1(ctx, len(sentences), body, promptAttempts)
+	return breakdown, metadata, usage, err
 }
 
 func wordRuV1ToGeneric(words []WordRuV1) []WordGenericV1 {
@@ -375,15 +380,12 @@ func (c OaiClient) DoSentenceBreakdown(
 	sentences []string,
 ) (SentenceBreakdownResult, error) {
 	if targetLang == LangRu {
-		generic, usage, err := c.doSentenceBreakdownRuV1(ctx, title, channel, promptVersion, sentences)
+		generic, metadata, usage, err := c.doSentenceBreakdownRuV1(ctx, title, channel, promptVersion, sentences)
 		if err != nil {
 			return SentenceBreakdownResult{Usage: usage}, err
 		}
 		return SentenceBreakdownResult{
-			Metadata: BreakdownMetadata{
-				Model:         modelForBreakdown,
-				PromptVersion: promptVersion,
-			},
+			Metadata:  metadata,
 			Usage:     usage,
 			Sentences: generic,
 		}, nil

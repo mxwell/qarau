@@ -17,9 +17,10 @@ import (
 // StreamedSentence is a single sentence breakdown, delivered as soon as its
 // JSON object has fully arrived
 type StreamedSentence struct {
-	SentenceNum int
-	Sentence    SentenceBreakdownGenericV1
-	Elapsed     time.Duration
+	SentIndex int // 0-based, sentence index in batch array
+	Breakdown SentenceBreakdownGenericV1
+	Metadata  BreakdownMetadata
+	Elapsed   time.Duration
 }
 
 type SentenceCallback func(StreamedSentence)
@@ -43,7 +44,7 @@ func (c OaiClient) streamSentenceBreakdownRuV1(
 ) ([]SentenceBreakdownRuV1, quota.TokenUsage, error) {
 	usage := quota.TokenUsage{}
 
-	body, err := c.buildBreakdownBodyRuV1(title, channel, promptVersion, sentences)
+	body, metadata, err := c.buildBreakdownBodyRuV1(title, channel, promptVersion, sentences)
 	if err != nil {
 		return nil, usage, err
 	}
@@ -66,7 +67,7 @@ func (c OaiClient) streamSentenceBreakdownRuV1(
 		done <- res
 	}()
 
-	collected, decodeErr := c.decodeSentenceStream(reader, promptStart, onSentence)
+	collected, decodeErr := c.decodeSentenceStream(reader, promptStart, metadata, onSentence)
 	// Unblock the pump if we stopped reading early, e.g. on a decode error.
 	reader.CloseWithError(decodeErr)
 
@@ -165,6 +166,7 @@ func (c OaiClient) pumpStream(
 func (c OaiClient) decodeSentenceStream(
 	r io.Reader,
 	promptStart time.Time,
+	metadata BreakdownMetadata,
 	onSentence SentenceCallback,
 ) ([]SentenceBreakdownRuV1, error) {
 	dec := json.NewDecoder(r)
@@ -189,7 +191,7 @@ func (c OaiClient) decodeSentenceStream(
 			}
 			continue
 		}
-		return c.decodeSentenceArray(dec, promptStart, onSentence)
+		return c.decodeSentenceArray(dec, promptStart, metadata, onSentence)
 	}
 
 	return nil, errors.New("llm stream: no 'sentences' field in response")
@@ -198,6 +200,7 @@ func (c OaiClient) decodeSentenceStream(
 func (c OaiClient) decodeSentenceArray(
 	dec *json.Decoder,
 	promptStart time.Time,
+	metadata BreakdownMetadata,
 	onSentence SentenceCallback,
 ) ([]SentenceBreakdownRuV1, error) {
 	if err := expectDelim(dec, '['); err != nil {
@@ -214,13 +217,14 @@ func (c OaiClient) decodeSentenceArray(
 
 		if onSentence != nil {
 			onSentence(StreamedSentence{
-				SentenceNum: sent.SentenceNum,
-				Sentence: SentenceBreakdownGenericV1{
+				SentIndex: sent.SentenceNum - 1,
+				Breakdown: SentenceBreakdownGenericV1{
 					Sentence:     sent.Sentence,
 					Translations: sent.Translations,
 					Breakdown:    wordRuV1ToGeneric(sent.Breakdown),
 				},
-				Elapsed: time.Since(promptStart),
+				Metadata: metadata,
+				Elapsed:  time.Since(promptStart),
 			})
 		}
 	}
@@ -249,6 +253,10 @@ func expectDelim(dec *json.Decoder, want json.Delim) error {
 // DoSentenceBreakdownStream is the streaming counterpart of DoSentenceBreakdown:
 // onSentence fires per sentence as it arrives, while the
 // returned result is identical in shape to the blocking call.
+//
+// Note: the `onSentence` callback is called synchronously:
+// * guarantee of a single-threaded execution
+// * slow DB can backpressure LLM stream consumption
 func (c OaiClient) DoSentenceBreakdownStream(
 	ctx context.Context,
 	targetLang, title, channel string,

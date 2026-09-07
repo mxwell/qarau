@@ -31,14 +31,14 @@ type OutputJson struct {
 
 func printStreamedSentence(sent llm.StreamedSentence) {
 	translation := ""
-	if len(sent.Sentence.Translations) > 0 {
-		translation = sent.Sentence.Translations[0]
+	if len(sent.Breakdown.Translations) > 0 {
+		translation = sent.Breakdown.Translations[0]
 	}
 	fmt.Printf(
 		"[+%7.3fs] sentence %d (%d words): %s\n",
 		sent.Elapsed.Seconds(),
-		sent.SentenceNum,
-		len(sent.Sentence.Breakdown),
+		sent.SentIndex,
+		len(sent.Breakdown.Breakdown),
 		translation,
 	)
 }

@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	dbgen "github.com/mxwell/qarau/db/gen"
 	"github.com/mxwell/qarau/internal/pg"
 	"github.com/mxwell/qarau/internal/quota"
@@ -32,7 +31,6 @@ type BBRunner struct {
 	name      string
 	logger    *slog.Logger
 	queries   *dbgen.Queries
-	pool      *pgxpool.Pool
 	llmQuota  *quota.LlmQuotaController
 	oaiClient *OaiClient
 	prompt    uint
@@ -41,7 +39,6 @@ type BBRunner struct {
 func NewBBRunner(
 	logger *slog.Logger,
 	queries *dbgen.Queries,
-	pool *pgxpool.Pool,
 	llmQuota *quota.LlmQuotaController,
 	oaiClient *OaiClient,
 	prompt uint,
@@ -51,9 +48,6 @@ func NewBBRunner(
 	}
 	if queries == nil {
 		return nil, errors.New("nil queries in BBRunner creation")
-	}
-	if pool == nil {
-		return nil, errors.New("nil pool in BBRunner creation")
 	}
 	if llmQuota == nil {
 		return nil, errors.New("nil LLM quota controller in BBRunner creation")
@@ -65,7 +59,6 @@ func NewBBRunner(
 		name:      "embedded_bbrunner_" + strconv.Itoa(rand.Int()%100),
 		logger:    logger,
 		queries:   queries,
-		pool:      pool,
 		llmQuota:  llmQuota,
 		oaiClient: oaiClient,
 		prompt:    prompt,
@@ -152,78 +145,81 @@ func (r *BBRunner) markDone(
 	}
 }
 
-func (r *BBRunner) insertBreakdowns(
+func (r *BBRunner) packTranslationsAndWordBreakdowns(
+	seq int32,
+	breakdown SentenceBreakdownGenericV1,
+) ([]byte, []byte, error) {
+	plainTranslations := PlainTranslations{
+		Variants: breakdown.Translations,
+	}
+
+	translationBytes, err := json.Marshal(plainTranslations)
+	if err != nil {
+		r.logger.Error("failed to marshal translations in sentence breakdown", "seq", seq, "translations", len(plainTranslations.Variants))
+		return nil, nil, fmt.Errorf("translations marshalling fail: %w", err)
+	}
+
+	wordBreakdownItems := FromWordGenericV1(breakdown.Breakdown)
+	plainBreakdown := PlainBreakdown{
+		Words: wordBreakdownItems,
+	}
+
+	breakdownBytes, err := json.Marshal(plainBreakdown)
+	if err != nil {
+		r.logger.Error("failed to marshal words in sentence breakdown", "seq", seq, "words", len(plainBreakdown.Words))
+		return nil, nil, fmt.Errorf("word breakdown marshalling fail: %w", err)
+	}
+
+	return translationBytes, breakdownBytes, nil
+}
+
+// Insert an early result, before a batch is complete
+func (r *BBRunner) insertSingleBreakdown(
 	ctx context.Context,
 	transcriptionID int64,
 	targetLang string,
 	batch []dbgen.GetSentencesRangeRow,
-	breakdownResult SentenceBreakdownResult,
+	sentence StreamedSentence,
 ) error {
-	tx, err := r.pool.Begin(ctx)
+	sentIndex := sentence.SentIndex
+	if sentIndex < 0 || sentIndex >= len(batch) {
+		r.logger.Warn(
+			"sentence index out of range",
+			"transcriptionID", transcriptionID,
+			"sentIndex", sentIndex,
+			"batch", len(batch),
+		)
+		return errors.New("sentence index out of range")
+	}
+	if sentence.Breakdown.Sentence == "" {
+		r.logger.Error(
+			"empty sentence in generated breakdown",
+			"transcriptionID", transcriptionID,
+			"sentIndex", sentIndex,
+			"batch", len(batch),
+		)
+		return errors.New("empty sentence in generated breakdown")
+	}
+	seq := batch[sentIndex].Seq
+	translationBytes, breakdownBytes, err := r.packTranslationsAndWordBreakdowns(seq, sentence.Breakdown)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx) // safe even after tx.Commit() -- does nothing
-
-	qtx := r.queries.WithTx(tx)
-
-	inserted := make([]SentBreakdown, 0)
-	for i, breakdown := range breakdownResult.Sentences {
-		seq := batch[i].Seq
-		if breakdown.Sentence == "" {
-			r.logger.Warn("empty sentence breakdown from LLM", "seq", seq, "sentence", batch[i].Text, "transcriptionID", transcriptionID)
-			continue
-		}
-
-		plainTranslations := PlainTranslations{
-			Variants: breakdown.Translations,
-		}
-
-		translationBytes, err := json.Marshal(plainTranslations)
-		if err != nil {
-			r.logger.Error("failed to marshal translations in sentence breakdown", "seq", seq, "translations", len(plainTranslations.Variants))
-			continue
-		}
-
-		wordBreakdownItems := FromWordGenericV1(breakdown.Breakdown)
-		plainBreakdown := PlainBreakdown{
-			Words: wordBreakdownItems,
-		}
-
-		breakdownBytes, err := json.Marshal(plainBreakdown)
-		if err != nil {
-			r.logger.Error("failed to marshal words in sentence breakdown", "seq", seq, "words", len(plainBreakdown.Words))
-			continue
-		}
-
-		err = qtx.InsertSentenceBreakdown(ctx, dbgen.InsertSentenceBreakdownParams{
-			TranscriptionID: transcriptionID,
-			SentenceSeq:     seq,
-			TargetLang:      targetLang,
-			Model:           breakdownResult.Metadata.Model,
-			PromptVersion:   int32(breakdownResult.Metadata.PromptVersion),
-			Translations:    translationBytes,
-			Breakdown:       breakdownBytes,
-		})
-		if err != nil {
-			r.logger.Error("failed to insert generated sent breakdown", "transcriptionID", transcriptionID, "seq", seq, "err", err)
-			return fmt.Errorf("breakdown insert fail: %w", err)
-		}
-		inserted = append(inserted, SentBreakdown{
-			Seq:          seq,
-			StartMs:      batch[i].StartMs,
-			EndMs:        batch[i].EndMs,
-			Text:         batch[i].Text,
-			Translations: breakdown.Translations,
-			Words:        wordBreakdownItems,
-		})
+	err = r.queries.InsertSentenceBreakdown(ctx, dbgen.InsertSentenceBreakdownParams{
+		TranscriptionID: transcriptionID,
+		SentenceSeq:     seq,
+		TargetLang:      targetLang,
+		Model:           sentence.Metadata.Model,
+		PromptVersion:   int32(sentence.Metadata.PromptVersion),
+		Translations:    translationBytes,
+		Breakdown:       breakdownBytes,
+	})
+	if err != nil {
+		r.logger.Error("failed to insert generated sent breakdown", "transcriptionID", transcriptionID, "seq", seq, "err", err)
+		return fmt.Errorf("breakdown insert fail: %w", err)
 	}
-	if len(inserted) == 0 {
-		r.logger.Error("none of generated breakdowns inserted", "transcriptionID", transcriptionID, "breakdowns", len(breakdownResult.Sentences))
-		return errors.New("none of generated breakdowns inserted")
-	}
-	r.logger.Info("inserted generated sent breakdowns", "transcriptionID", transcriptionID, "total", len(batch), "inserted", len(inserted))
-	return tx.Commit(ctx)
+	r.logger.Info("inserted single sent breakdown", "transcriptionID", transcriptionID, "seq", seq)
+	return nil
 }
 
 func (r *BBRunner) process(
@@ -243,13 +239,32 @@ func (r *BBRunner) process(
 		return fmt.Errorf("failed to load video details for breakdown: %w", err)
 	}
 
-	breakdownResult, err := r.oaiClient.DoSentenceBreakdown(
+	insertedIndexes := map[int]bool{}
+	var savedInsertErr error
+	breakdownResult, err := r.oaiClient.DoSentenceBreakdownStream(
 		ctx,
 		targetLang,
 		videoDetails.Title,
 		videoDetails.ChannelTitle,
 		r.prompt,
 		sentences,
+		func(ss StreamedSentence) {
+			insertErr := r.insertSingleBreakdown(
+				ctx,
+				transcriptionID,
+				targetLang,
+				batch,
+				ss,
+			)
+			if insertErr != nil {
+				r.logger.Error("insertSingleBreakdown fail", "insertErr", insertErr)
+				if savedInsertErr == nil {
+					savedInsertErr = insertErr
+				}
+			} else {
+				insertedIndexes[ss.SentIndex] = true
+			}
+		},
 	)
 	if breakdownResult.Usage.Input > 0 || breakdownResult.Usage.Output > 0 {
 		today := quota.GetTodayForQuota()
@@ -274,14 +289,31 @@ func (r *BBRunner) process(
 		return err
 	}
 
-	err = r.insertBreakdowns(
-		ctx,
-		transcriptionID,
-		targetLang,
-		batch,
-		breakdownResult,
-	)
-	return err
+	insertedCount := len(insertedIndexes)
+	// the same condition as in arrangeAndConvert()
+	if insertedCount*2 >= len(batch) {
+		r.logger.Info(
+			"inserted sentence breakdowns",
+			"transcriptionID", transcriptionID,
+			"inserted", insertedCount,
+			"sentences", len(batch),
+		)
+	} else {
+		r.logger.Error(
+			"too few sentence breakdowns inserted",
+			"transcriptionID", transcriptionID,
+			"inserted", insertedCount,
+			"sentences", len(batch),
+			"err", savedInsertErr,
+		)
+		if savedInsertErr != nil {
+			return fmt.Errorf("breakdown insert fail: %w", savedInsertErr)
+		} else {
+			return fmt.Errorf("only %d out of %d breakdowns inserted", insertedCount, len(batch))
+		}
+	}
+
+	return nil
 }
 
 // Return:

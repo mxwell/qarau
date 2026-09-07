@@ -199,7 +199,6 @@ func run() error {
 	bbRunner, err := llm.NewBBRunner(
 		logger,
 		queries,
-		db,
 		llmQuotaCtl,
 		oaiClient,
 		cfg.LlmPrompt,
