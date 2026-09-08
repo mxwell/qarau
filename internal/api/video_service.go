@@ -744,6 +744,9 @@ type GetBreakdownsResponse struct {
 
 	// batch is running => client should keep polling
 	BatchRunning bool `json:"batch_running"`
+
+	// a sentence text (at `seq`) from the batch to show during generation
+	Preview string `json:"preview"`
 }
 
 func (s *VideoService) GetBreakdowns(ctx context.Context, transcriptionID int64, targetLang string, sentSeq int32) (GetBreakdownsResponse, error) {
@@ -812,6 +815,12 @@ func (s *VideoService) GetBreakdowns(ctx context.Context, transcriptionID int64,
 		}, nil
 	}
 
+	preview := ""
+	offset := sentSeq - batchStart
+	if int(offset) < len(batch) {
+		preview = batch[offset].Text
+	}
+
 	batchRow, err := s.queries.GetBreakdownBatch(ctx, dbgen.GetBreakdownBatchParams{
 		TranscriptionID: transcriptionID,
 		BatchStartSeq:   batchStart,
@@ -853,6 +862,7 @@ func (s *VideoService) GetBreakdowns(ctx context.Context, transcriptionID int64,
 		BatchStart: batchStart,
 
 		BatchRunning: batchRunning,
+		Preview:      preview,
 	}, nil
 }
 
