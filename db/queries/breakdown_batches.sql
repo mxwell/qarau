@@ -27,6 +27,7 @@ RETURNING id, state, last_error;
 SELECT
     id,
     state,
+    locked_until,
     last_error,
     created_at,
     finished_at

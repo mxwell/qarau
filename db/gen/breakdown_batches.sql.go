@@ -118,6 +118,7 @@ const getBreakdownBatch = `-- name: GetBreakdownBatch :one
 SELECT
     id,
     state,
+    locked_until,
     last_error,
     created_at,
     finished_at
@@ -135,11 +136,12 @@ type GetBreakdownBatchParams struct {
 }
 
 type GetBreakdownBatchRow struct {
-	ID         int64              `json:"id"`
-	State      BatchState         `json:"state"`
-	LastError  *string            `json:"last_error"`
-	CreatedAt  pgtype.Timestamptz `json:"created_at"`
-	FinishedAt pgtype.Timestamptz `json:"finished_at"`
+	ID          int64              `json:"id"`
+	State       BatchState         `json:"state"`
+	LockedUntil pgtype.Timestamptz `json:"locked_until"`
+	LastError   *string            `json:"last_error"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	FinishedAt  pgtype.Timestamptz `json:"finished_at"`
 }
 
 func (q *Queries) GetBreakdownBatch(ctx context.Context, arg GetBreakdownBatchParams) (GetBreakdownBatchRow, error) {
@@ -148,6 +150,7 @@ func (q *Queries) GetBreakdownBatch(ctx context.Context, arg GetBreakdownBatchPa
 	err := row.Scan(
 		&i.ID,
 		&i.State,
+		&i.LockedUntil,
 		&i.LastError,
 		&i.CreatedAt,
 		&i.FinishedAt,

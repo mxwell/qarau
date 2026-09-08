@@ -741,6 +741,9 @@ type GetBreakdownsResponse struct {
 	StartMs    int32 `json:"start_ms"`
 	EndMs      int32 `json:"end_ms"`
 	BatchStart int32 `json:"batch_start"`
+
+	// batch is running => client should keep polling
+	BatchRunning bool `json:"batch_running"`
 }
 
 func (s *VideoService) GetBreakdowns(ctx context.Context, transcriptionID int64, targetLang string, sentSeq int32) (GetBreakdownsResponse, error) {
@@ -788,16 +791,20 @@ func (s *VideoService) GetBreakdowns(ctx context.Context, transcriptionID int64,
 		)
 		return GetBreakdownsResponse{}, err
 	}
-	// return if we have any batch coverage, even with gaps
+	breakdowns := make([]llm.SentBreakdown, 0)
 	if len(dbBreakdowns) > 0 {
 		breakdownContent, err := llm.ToBreakdownContent(dbBreakdowns)
 		if err != nil {
 			return GetBreakdownsResponse{}, fmt.Errorf("existing breakdown load fail: %w", err)
 		}
-		joined := s.joinSentenceBreakdowns(batch, breakdownContent)
+		breakdowns = s.joinSentenceBreakdowns(batch, breakdownContent)
+	}
+
+	// if all sentences are covered, return early, without batch check in DB
+	if len(breakdowns) >= len(batch) {
 		return GetBreakdownsResponse{
 			Ok:         true,
-			Breakdowns: joined,
+			Breakdowns: breakdowns,
 			Message:    "",
 			StartMs:    batchStartMs,
 			EndMs:      batchEndMs,
@@ -811,14 +818,25 @@ func (s *VideoService) GetBreakdowns(ctx context.Context, transcriptionID int64,
 		TargetLang:      targetLang,
 	})
 	message := "breakdowns missing"
+	batchRunning := false
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return GetBreakdownsResponse{}, err
 		}
 	} else {
 		switch batchRow.State {
-		case dbgen.BatchStatePending, dbgen.BatchStateRunning:
+		case dbgen.BatchStatePending:
 			message = "breakdowns pending"
+		case dbgen.BatchStateRunning:
+			message = "breakdowns running"
+			batchRunning = batchRow.LockedUntil.Time.After(time.Now())
+			s.log.Info(
+				"batch state running",
+				"transcriptionID", transcriptionID,
+				"batchStart", batchStart,
+				"lockedUntil", batchRow.LockedUntil,
+				"batchRunning_flag", batchRunning,
+			)
 		case dbgen.BatchStateDone:
 			message = "breakdowns done"
 		case dbgen.BatchStateFailed:
@@ -827,11 +845,14 @@ func (s *VideoService) GetBreakdowns(ctx context.Context, transcriptionID int64,
 	}
 
 	return GetBreakdownsResponse{
-		Ok:         false,
+		Ok:         len(breakdowns) > 0,
+		Breakdowns: breakdowns,
 		Message:    message,
 		StartMs:    batchStartMs,
 		EndMs:      batchEndMs,
 		BatchStart: batchStart,
+
+		BatchRunning: batchRunning,
 	}, nil
 }
 
