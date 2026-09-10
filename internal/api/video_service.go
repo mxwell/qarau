@@ -629,7 +629,7 @@ func (s *VideoService) GetSubtitles(ctx context.Context, transcriptionID int64, 
 		})
 		maxSeq = max(maxSeq, w.Seq)
 	}
-	subtitleItems := subtitles.Group(inputWords, 1000, 20)
+	subtitleItems := subtitles.Group(inputWords, 1000, 14)
 
 	/**
 	 * XXX pagination is simplified here.
