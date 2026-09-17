@@ -110,7 +110,13 @@ func NewDailyWriter(dir, component string, level slog.Level, altHandler slog.Han
 	if altHandler != nil {
 		handler = slog.NewMultiHandler(handler, altHandler)
 	}
-	return slog.New(handler), w, nil
+	logger := slog.New(handler)
+
+	// redirect messages from dependency libs to the same JSON files
+	slog.SetDefault(logger)
+	slog.SetLogLoggerLevel(slog.LevelInfo)
+
+	return logger, w, nil
 }
 
 func getToday() string {

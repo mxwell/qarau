@@ -39,3 +39,12 @@ func FiberRequestLogger(log *slog.Logger) fiber.Handler {
 		return err
 	}
 }
+
+// Strip any cookies to prevent Sentry from
+// polluting the log with cookie parsing errors
+func StripRequestCookies() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		c.Request().Header.DelAllCookies()
+		return c.Next()
+	}
+}

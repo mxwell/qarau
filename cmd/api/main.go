@@ -143,6 +143,7 @@ func run() error {
 		DisableStartupMessage: true,
 	})
 	app.Use(
+		logging.StripRequestCookies(),
 		sentryHandler,
 		logging.FiberRequestLogger(logger),
 	)
