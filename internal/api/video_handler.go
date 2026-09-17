@@ -7,6 +7,7 @@ import (
 	"math"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/mxwell/qarau/internal/fiberutil"
@@ -18,6 +19,12 @@ var (
 	onlineVideoIDPattern    = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
 	onlinePlaylistIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{10,40}$`)
 	errInvalidParam         = errors.New("invalid param")
+)
+
+const (
+	recommendTopicsMin = 3
+	recommendTopicsMax = 30
+	recommendVideosMax = 10
 )
 
 type VideoHandler struct {
@@ -40,6 +47,8 @@ func NewVideoHandler(log *slog.Logger, svc *VideoService) (*VideoHandler, error)
 
 func (h *VideoHandler) Register(r fiber.Router) {
 	r.Get("/suggested_videos", h.SuggestedVideos)
+	r.Get("/topics", h.Topics)
+	r.Get("/videos_on_topics", h.VideosOnTopics)
 	r.Get("/suggested_playlists", h.SuggestedPlaylists)
 	r.Get("/playlist/:online_playlist_id", h.Playlist)
 	r.Get("/probe/:online_video_id", h.Probe)
@@ -384,6 +393,47 @@ func (h *VideoHandler) SuggestedVideos(c *fiber.Ctx) error {
 	response, err := h.svc.GetSuggestedVideos(c.UserContext())
 	if err != nil {
 		h.log.Error("failed to load suggested videos", "err", err)
+		return internalError(c, "internal error")
+	}
+	return c.JSON(response)
+}
+
+func (h *VideoHandler) Topics(c *fiber.Ctx) error {
+	response, err := h.svc.GetTopics(c.UserContext())
+	if err != nil {
+		h.log.Error("failed to load topics", "err", err)
+		return internalError(c, "internal error")
+	}
+	return c.JSON(response)
+}
+
+func (h *VideoHandler) VideosOnTopics(c *fiber.Ctx) error {
+	topicsMap := make(map[string]bool)
+	topics := make([]string, 0)
+	if topicsStr := c.Query("topics"); topicsStr != "" {
+		parts := strings.Split(topicsStr, ",")
+		for i, topic := range parts {
+			if len(topic) == 0 || len(topic) > 30 {
+				h.log.Info("invalid topic len", "topics", topicsStr, "i", i, "len", len(topic))
+				return fiberutil.BadRequest(c, fmt.Sprintf("invalid topic: %s", topic))
+			}
+			if topicsMap[topic] {
+				return fiberutil.BadRequest(c, fmt.Sprintf("duplicate topic: %s", topic))
+			}
+			topicsMap[topic] = true
+			topics = append(topics, topic)
+		}
+	}
+	if len(topics) < recommendTopicsMin || len(topics) > recommendTopicsMax {
+		h.log.Info("invalid topics count for video recommendation", "topics", len(topics))
+		return fiberutil.BadRequest(c, "invalid topics count")
+	}
+	response, err := h.svc.GetVideosOnTopics(c.UserContext(), topics, recommendVideosMax)
+	if err != nil {
+		if errors.Is(err, ErrNoSuchTopic) {
+			return fiberutil.BadRequest(c, "invalid topic")
+		}
+		h.log.Error("failed to load videos on topics", "err", err)
 		return internalError(c, "internal error")
 	}
 	return c.JSON(response)

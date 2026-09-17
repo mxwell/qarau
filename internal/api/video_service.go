@@ -23,6 +23,7 @@ var (
 	ErrUnprocessableVideo  = errors.New("unprocessable video")
 	ErrNoSuchTranscription = errors.New("no transcription")
 	ErrNoSuchSeq           = errors.New("no seq")
+	ErrNoSuchTopic         = errors.New("no such topic slug")
 )
 
 type VideoService struct {
@@ -1057,6 +1058,96 @@ func (s *VideoService) GetSuggestedVideos(ctx context.Context) (SuggestedVideos,
 
 	return SuggestedVideos{
 		Videos: videos,
+	}, nil
+}
+
+type TopicsResponse struct {
+	Slugs []string `json:"slugs"`
+}
+
+func (s *VideoService) GetTopics(ctx context.Context) (TopicsResponse, error) {
+	slugs, err := s.queries.GetSortedTopicSlugs(ctx)
+	if err != nil {
+		return TopicsResponse{}, fmt.Errorf("topic slugs load fail: %w", err)
+	}
+	if len(slugs) == 0 {
+		return TopicsResponse{}, errors.New("no topic slugs found")
+	}
+	s.log.Info("loaded topics", "topics", len(slugs))
+	return TopicsResponse{
+		Slugs: slugs,
+	}, nil
+}
+
+type VideosOnTopicsResponse struct {
+	AvailableTopics []string         `json:"available_topics"`
+	Videos          []SuggestedVideo `json:"videos"`
+}
+
+func recommendRowToSuggestedVideo(row dbgen.RecommendVideosByTopicsRow) (*SuggestedVideo, error) {
+	if row.ThumbnailUrl == nil {
+		return nil, ErrCorruptedData
+	}
+	if row.ThumbnailWidth == nil {
+		return nil, ErrCorruptedData
+	}
+	if row.ThumbnailHeight == nil {
+		return nil, ErrCorruptedData
+	}
+	return &SuggestedVideo{
+		OnlineVideoID:   row.OnlineVideoID,
+		Title:           row.Title,
+		ChannelTitle:    row.ChannelTitle,
+		DurationSecs:    MicrosToFloorInt32Seconds(row.Duration.Microseconds),
+		ThumbnailURL:    *row.ThumbnailUrl,
+		ThumbnailWidth:  *row.ThumbnailWidth,
+		ThumbnailHeight: *row.ThumbnailHeight,
+	}, nil
+}
+
+func (s *VideoService) GetVideosOnTopics(ctx context.Context, requestSlugs []string, limit int) (VideosOnTopicsResponse, error) {
+	availableSlugs, err := s.queries.GetSortedTopicSlugs(ctx)
+	if err != nil {
+		return VideosOnTopicsResponse{}, fmt.Errorf("topic slugs load fail: %w", err)
+	}
+	availableMap := make(map[string]bool, len(availableSlugs))
+	for _, slug := range availableSlugs {
+		availableMap[slug] = true
+	}
+	for _, slug := range requestSlugs {
+		if !availableMap[slug] {
+			s.log.Info(
+				"unknown topic slug in recommend request",
+				"slugs", len(requestSlugs),
+				"slug", slug,
+			)
+			return VideosOnTopicsResponse{}, ErrNoSuchTopic
+		}
+	}
+	videoRows, err := s.queries.RecommendVideosByTopics(ctx, dbgen.RecommendVideosByTopicsParams{
+		Slugs:    requestSlugs,
+		PageSize: int32(limit),
+	})
+	if err != nil {
+		return VideosOnTopicsResponse{}, fmt.Errorf("videos by topics load fail: %w", err)
+	}
+	videos := make([]SuggestedVideo, 0, len(videoRows))
+	for _, row := range videoRows {
+		converted, err := recommendRowToSuggestedVideo(row)
+		if err != nil {
+			return VideosOnTopicsResponse{}, fmt.Errorf("recommended video conversion fail: %w", err)
+		}
+		videos = append(videos, *converted)
+	}
+	s.log.Info(
+		"loaded video recommendations",
+		"slugs", len(requestSlugs),
+		"available", len(availableSlugs),
+		"videos", len(videos),
+	)
+	return VideosOnTopicsResponse{
+		AvailableTopics: availableSlugs,
+		Videos:          videos,
 	}, nil
 }
 

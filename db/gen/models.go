@@ -223,6 +223,12 @@ type SentenceBreakdown struct {
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
+type Topic struct {
+	ID     int16  `json:"id"`
+	Slug   string `json:"slug"`
+	Active bool   `json:"active"`
+}
+
 type Transcription struct {
 	ID        int64              `json:"id"`
 	VideoID   int64              `json:"video_id"`
@@ -246,6 +252,12 @@ type Video struct {
 	ThumbnailWidth  *int32             `json:"thumbnail_width"`
 	ThumbnailHeight *int32             `json:"thumbnail_height"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+}
+
+type VideoTopic struct {
+	VideoID   int64              `json:"video_id"`
+	TopicID   int16              `json:"topic_id"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
 type Word struct {

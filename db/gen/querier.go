@@ -50,6 +50,7 @@ type Querier interface {
 	// prompt produced it.
 	GetSentenceBreakdowns(ctx context.Context, arg GetSentenceBreakdownsParams) ([]GetSentenceBreakdownsRow, error)
 	GetSentencesRange(ctx context.Context, arg GetSentencesRangeParams) ([]GetSentencesRangeRow, error)
+	GetSortedTopicSlugs(ctx context.Context) ([]string, error)
 	GetSuggestedVideos(ctx context.Context) ([]GetSuggestedVideosRow, error)
 	GetTranscription(ctx context.Context, id int64) (Transcription, error)
 	GetTranscriptionsByVideoID(ctx context.Context, videoID int64) ([]Transcription, error)
@@ -74,6 +75,11 @@ type Querier interface {
 	MarkBreakdownBatchFailed(ctx context.Context, arg MarkBreakdownBatchFailedParams) (int64, error)
 	MarkJobDone(ctx context.Context, arg MarkJobDoneParams) (int64, error)
 	MarkJobFailed(ctx context.Context, arg MarkJobFailedParams) (int64, error)
+	// Videos matching any of the selected topics, in weighted random order:
+	// power(random(), 1/w) DESC with w = number of matched topics makes a video
+	// that hits all of the user's topics likelier to surface than one that hits a
+	// single topic, while still reshuffling on every request.
+	RecommendVideosByTopics(ctx context.Context, arg RecommendVideosByTopicsParams) ([]RecommendVideosByTopicsRow, error)
 	UnlockJob(ctx context.Context, arg UnlockJobParams) (int64, error)
 	UpdatePlaylistDetails(ctx context.Context, arg UpdatePlaylistDetailsParams) error
 	UpdatePlaylistWithError(ctx context.Context, arg UpdatePlaylistWithErrorParams) error
