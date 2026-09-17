@@ -6,6 +6,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/mxwell/qarau/internal/api"
+	"github.com/mxwell/qarau/internal/constants"
 	"github.com/mxwell/qarau/internal/fiberutil"
 )
 
@@ -35,6 +36,7 @@ func NewAdminHandler(log *slog.Logger, svc *AdminService, sentMan *api.SentenceM
 func (h *AdminHandler) Register(r fiber.Router) {
 	r.Get("/jobs", h.ListJobs)
 	r.Post("/backfill_sentences", h.BackfillSentences)
+	r.Post("/set_video_topics", h.SetVideoTopics)
 }
 
 func AdminAuth(token string) fiber.Handler {
@@ -90,5 +92,45 @@ func (h *AdminHandler) BackfillSentences(c *fiber.Ctx) error {
 	}
 	return c.JSON(BackfillSentencesResponse{
 		InsertedSentences: insertedSentences,
+	})
+}
+
+type SetVideoTopicsRequest struct {
+	OnlineVideoID string   `json:"online_video_id"`
+	Topics        []string `json:"topics"`
+}
+
+type SetVideoTopicsResponse struct {
+	Ok      bool   `json:"ok"`
+	Message string `json:"message"`
+}
+
+func (h *AdminHandler) SetVideoTopics(c *fiber.Ctx) error {
+	var req SetVideoTopicsRequest
+	if err := c.BodyParser(&req); err != nil {
+		return fiberutil.BadRequest(c, "body parse error")
+	}
+	onlineVideoID := req.OnlineVideoID
+	if !constants.OnlineVideoIDPattern.MatchString(onlineVideoID) {
+		h.log.Info("invalid arg in SetVideoTopics request", "online_video_id", onlineVideoID)
+		return fiberutil.BadRequest(c, "invalid online_video_id")
+	}
+	topics := req.Topics
+	// 0 topics is fine: it means delete
+	if len(topics) > 30 {
+		h.log.Info("invalid topic count in SetVideoTopics request", "topics", len(topics))
+		return fiberutil.BadRequest(c, "invalid topic count")
+	}
+
+	err := h.svc.SetVideoTopics(c.UserContext(), onlineVideoID, topics)
+	if err != nil {
+		return c.JSON(SetVideoTopicsResponse{
+			Ok:      false,
+			Message: err.Error(),
+		})
+	}
+
+	return c.JSON(SetVideoTopicsResponse{
+		Ok: true,
 	})
 }

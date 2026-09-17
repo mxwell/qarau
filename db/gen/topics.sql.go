@@ -11,28 +11,33 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const getSortedTopicSlugs = `-- name: GetSortedTopicSlugs :many
+const getActiveTopics = `-- name: GetActiveTopics :many
 SELECT
+    id,
     slug
 FROM topics
 WHERE active
-ORDER BY slug ASC
 LIMIT 30
 `
 
-func (q *Queries) GetSortedTopicSlugs(ctx context.Context) ([]string, error) {
-	rows, err := q.db.Query(ctx, getSortedTopicSlugs)
+type GetActiveTopicsRow struct {
+	ID   int16  `json:"id"`
+	Slug string `json:"slug"`
+}
+
+func (q *Queries) GetActiveTopics(ctx context.Context) ([]GetActiveTopicsRow, error) {
+	rows, err := q.db.Query(ctx, getActiveTopics)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []string
+	var items []GetActiveTopicsRow
 	for rows.Next() {
-		var slug string
-		if err := rows.Scan(&slug); err != nil {
+		var i GetActiveTopicsRow
+		if err := rows.Scan(&i.ID, &i.Slug); err != nil {
 			return nil, err
 		}
-		items = append(items, slug)
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -104,4 +109,29 @@ func (q *Queries) RecommendVideosByTopics(ctx context.Context, arg RecommendVide
 		return nil, err
 	}
 	return items, nil
+}
+
+const resetVideoTopics = `-- name: ResetVideoTopics :exec
+DELETE FROM video_topics
+WHERE video_id = $1
+`
+
+func (q *Queries) ResetVideoTopics(ctx context.Context, videoID int64) error {
+	_, err := q.db.Exec(ctx, resetVideoTopics, videoID)
+	return err
+}
+
+const setVideoTopic = `-- name: SetVideoTopic :exec
+INSERT INTO video_topics (video_id, topic_id)
+VALUES ($1, $2)
+`
+
+type SetVideoTopicParams struct {
+	VideoID int64 `json:"video_id"`
+	TopicID int16 `json:"topic_id"`
+}
+
+func (q *Queries) SetVideoTopic(ctx context.Context, arg SetVideoTopicParams) error {
+	_, err := q.db.Exec(ctx, setVideoTopic, arg.VideoID, arg.TopicID)
+	return err
 }

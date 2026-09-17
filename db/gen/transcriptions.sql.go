@@ -11,6 +11,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countTranscriptionsByVideoID = `-- name: CountTranscriptionsByVideoID :one
+SELECT COUNT(*) FROM transcriptions
+WHERE video_id = $1
+`
+
+func (q *Queries) CountTranscriptionsByVideoID(ctx context.Context, videoID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countTranscriptionsByVideoID, videoID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteWordsByTranscriptionId = `-- name: DeleteWordsByTranscriptionId :exec
 DELETE FROM words WHERE transcription_id = $1
 `

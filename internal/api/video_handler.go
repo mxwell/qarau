@@ -5,20 +5,18 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
-	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/mxwell/qarau/internal/constants"
 	"github.com/mxwell/qarau/internal/fiberutil"
 	"github.com/mxwell/qarau/internal/llm"
 	"github.com/mxwell/qarau/internal/subtitles"
 )
 
 var (
-	onlineVideoIDPattern    = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
-	onlinePlaylistIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{10,40}$`)
-	errInvalidParam         = errors.New("invalid param")
+	errInvalidParam = errors.New("invalid param")
 )
 
 const (
@@ -120,7 +118,7 @@ func (h *VideoHandler) probeVideo(c *fiber.Ctx, onlineVideoID string, force bool
 
 func (h *VideoHandler) Probe(c *fiber.Ctx) error {
 	onlineVideoID := c.Params("online_video_id")
-	if !onlineVideoIDPattern.MatchString(onlineVideoID) {
+	if !constants.OnlineVideoIDPattern.MatchString(onlineVideoID) {
 		h.log.Info("invalid argument", "onlineVideoID", onlineVideoID)
 		return badRequest(c, "invalid online_video_id")
 	}
@@ -464,12 +462,12 @@ func (h *VideoHandler) SuggestedPlaylists(c *fiber.Ctx) error {
 // The flag `video_in_page` indicates whether the video is found in the particular page.
 func (h *VideoHandler) Playlist(c *fiber.Ctx) error {
 	onlinePlaylistID := c.Params("online_playlist_id")
-	if !onlinePlaylistIDPattern.MatchString(onlinePlaylistID) {
+	if !constants.OnlinePlaylistIDPattern.MatchString(onlinePlaylistID) {
 		h.log.Info("invalid online_playlist_id in Playlist call", "onlinePlaylistID", onlinePlaylistID)
 		return badRequest(c, "invalid playlist ID")
 	}
 	v := c.Query("v")
-	if v != "" && !onlineVideoIDPattern.MatchString(v) {
+	if v != "" && !constants.OnlineVideoIDPattern.MatchString(v) {
 		h.log.Info("invalid v in Playlist call", "v", v, "onlinePlaylistID", onlinePlaylistID)
 		return badRequest(c, "invalid v")
 	}

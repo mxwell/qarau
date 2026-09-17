@@ -15,6 +15,7 @@ import (
 	"github.com/mxwell/qarau/internal/llm"
 	"github.com/mxwell/qarau/internal/pg"
 	"github.com/mxwell/qarau/internal/quota"
+	"github.com/mxwell/qarau/internal/recommend"
 	"github.com/mxwell/qarau/internal/subtitles"
 )
 
@@ -1066,12 +1067,17 @@ type TopicsResponse struct {
 }
 
 func (s *VideoService) GetTopics(ctx context.Context) (TopicsResponse, error) {
-	slugs, err := s.queries.GetSortedTopicSlugs(ctx)
+	activeTopics, err := s.queries.GetActiveTopics(ctx)
 	if err != nil {
-		return TopicsResponse{}, fmt.Errorf("topic slugs load fail: %w", err)
+		s.log.Error("failed to load topics", "err", err)
+		return TopicsResponse{}, fmt.Errorf("topic load fail: %w", err)
 	}
-	if len(slugs) == 0 {
-		return TopicsResponse{}, errors.New("no topic slugs found")
+	if len(activeTopics) == 0 {
+		return TopicsResponse{}, errors.New("no topics found")
+	}
+	slugs := make([]string, 0, len(activeTopics))
+	for _, row := range activeTopics {
+		slugs = append(slugs, row.Slug)
 	}
 	s.log.Info("loaded topics", "topics", len(slugs))
 	return TopicsResponse{
@@ -1106,23 +1112,25 @@ func recommendRowToSuggestedVideo(row dbgen.RecommendVideosByTopicsRow) (*Sugges
 }
 
 func (s *VideoService) GetVideosOnTopics(ctx context.Context, requestSlugs []string, limit int) (VideosOnTopicsResponse, error) {
-	availableSlugs, err := s.queries.GetSortedTopicSlugs(ctx)
+	activeTopics, err := s.queries.GetActiveTopics(ctx)
 	if err != nil {
-		return VideosOnTopicsResponse{}, fmt.Errorf("topic slugs load fail: %w", err)
+		s.log.Error("failed to load topics", "err", err)
+		return VideosOnTopicsResponse{}, fmt.Errorf("topic load fail: %w", err)
 	}
-	availableMap := make(map[string]bool, len(availableSlugs))
-	for _, slug := range availableSlugs {
-		availableMap[slug] = true
+	available := make(map[string]int16)
+	availableSlugs := make([]string, 0, len(activeTopics))
+	for _, row := range activeTopics {
+		available[row.Slug] = row.ID
+		availableSlugs = append(availableSlugs, row.Slug)
 	}
-	for _, slug := range requestSlugs {
-		if !availableMap[slug] {
-			s.log.Info(
-				"unknown topic slug in recommend request",
-				"slugs", len(requestSlugs),
-				"slug", slug,
-			)
-			return VideosOnTopicsResponse{}, ErrNoSuchTopic
-		}
+	_, err = recommend.SlugsToTopics(available, requestSlugs)
+	if err != nil {
+		s.log.Info(
+			"unknown topic slug in recommend request",
+			"slugs", len(requestSlugs),
+			"err", err,
+		)
+		return VideosOnTopicsResponse{}, ErrNoSuchTopic
 	}
 	videoRows, err := s.queries.RecommendVideosByTopics(ctx, dbgen.RecommendVideosByTopicsParams{
 		Slugs:    requestSlugs,

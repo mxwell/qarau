@@ -41,6 +41,10 @@ LIMIT 1;
 SELECT * FROM transcriptions
 WHERE video_id = sqlc.arg('video_id');
 
+-- name: CountTranscriptionsByVideoID :one
+SELECT COUNT(*) FROM transcriptions
+WHERE video_id = sqlc.arg('video_id');
+
 -- name: GetWords :many
 SELECT * FROM words
 WHERE

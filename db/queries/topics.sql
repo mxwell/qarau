@@ -1,10 +1,18 @@
--- name: GetSortedTopicSlugs :many
+-- name: GetActiveTopics :many
 SELECT
+    id,
     slug
 FROM topics
 WHERE active
-ORDER BY slug ASC
 LIMIT 30;
+
+-- name: ResetVideoTopics :exec
+DELETE FROM video_topics
+WHERE video_id = sqlc.arg('video_id');
+
+-- name: SetVideoTopic :exec
+INSERT INTO video_topics (video_id, topic_id)
+VALUES (sqlc.arg('video_id'), sqlc.arg('topic_id'));
 
 -- name: RecommendVideosByTopics :many
 -- Videos matching any of the selected topics, in weighted random order:

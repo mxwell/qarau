@@ -172,7 +172,7 @@ func run() error {
 	videoHandler.Register(apiRouter)
 
 	if adminToken := cfg.AdminToken; adminToken != "" {
-		adminService, err := admin.NewAdminService(logger, queries)
+		adminService, err := admin.NewAdminService(logger, queries, db)
 		if err != nil {
 			logger.Error("failed to create AdminService", "err", err)
 			return err

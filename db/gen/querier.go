@@ -20,6 +20,7 @@ type Querier interface {
 	// not queue dozens of paid LLM calls.
 	CountActiveBreakdownBatches(ctx context.Context, transcriptionID int64) (int64, error)
 	CountSentenceBreakdowns(ctx context.Context, arg CountSentenceBreakdownsParams) (int64, error)
+	CountTranscriptionsByVideoID(ctx context.Context, videoID int64) (int64, error)
 	CreateAsrJob(ctx context.Context, fetchJobID int64) (int64, error)
 	CreateAudioBlob(ctx context.Context, arg CreateAudioBlobParams) (int64, error)
 	CreateFetchJobIfAbsent(ctx context.Context, arg CreateFetchJobIfAbsentParams) (int64, error)
@@ -35,6 +36,7 @@ type Querier interface {
 	// to GetFirstSentenceSeq.
 	FindSentenceSeqByStartMs(ctx context.Context, arg FindSentenceSeqByStartMsParams) (int32, error)
 	FindSeqByStartMs(ctx context.Context, arg FindSeqByStartMsParams) (int32, error)
+	GetActiveTopics(ctx context.Context) ([]GetActiveTopicsRow, error)
 	GetAsrJobQueue(ctx context.Context, createdBefore pgtype.Timestamptz) ([]GetAsrJobQueueRow, error)
 	GetAsrQuota(ctx context.Context, day pgtype.Date) (int32, error)
 	GetAudioBlob(ctx context.Context, videoID int64) (GetAudioBlobRow, error)
@@ -50,13 +52,13 @@ type Querier interface {
 	// prompt produced it.
 	GetSentenceBreakdowns(ctx context.Context, arg GetSentenceBreakdownsParams) ([]GetSentenceBreakdownsRow, error)
 	GetSentencesRange(ctx context.Context, arg GetSentencesRangeParams) ([]GetSentencesRangeRow, error)
-	GetSortedTopicSlugs(ctx context.Context) ([]string, error)
 	GetSuggestedVideos(ctx context.Context) ([]GetSuggestedVideosRow, error)
 	GetTranscription(ctx context.Context, id int64) (Transcription, error)
 	GetTranscriptionsByVideoID(ctx context.Context, videoID int64) ([]Transcription, error)
 	GetVideo(ctx context.Context, onlineVideoID string) (GetVideoRow, error)
 	GetVideoByID(ctx context.Context, videoID int64) (GetVideoByIDRow, error)
 	GetVideoByTranscriptionID(ctx context.Context, transcriptionID int64) (GetVideoByTranscriptionIDRow, error)
+	GetVideoID(ctx context.Context, onlineVideoID string) (int64, error)
 	GetVideoJobs(ctx context.Context, videoID int64) ([]GetVideoJobsRow, error)
 	GetWords(ctx context.Context, arg GetWordsParams) ([]Word, error)
 	// Only ever called for sentences that have no breakdown yet, so a conflict
@@ -80,6 +82,8 @@ type Querier interface {
 	// that hits all of the user's topics likelier to surface than one that hits a
 	// single topic, while still reshuffling on every request.
 	RecommendVideosByTopics(ctx context.Context, arg RecommendVideosByTopicsParams) ([]RecommendVideosByTopicsRow, error)
+	ResetVideoTopics(ctx context.Context, videoID int64) error
+	SetVideoTopic(ctx context.Context, arg SetVideoTopicParams) error
 	UnlockJob(ctx context.Context, arg UnlockJobParams) (int64, error)
 	UpdatePlaylistDetails(ctx context.Context, arg UpdatePlaylistDetailsParams) error
 	UpdatePlaylistWithError(ctx context.Context, arg UpdatePlaylistWithErrorParams) error

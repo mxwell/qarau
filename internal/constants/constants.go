@@ -1,6 +1,9 @@
 package constants
 
-import "time"
+import (
+	"regexp"
+	"time"
+)
 
 const (
 	MaxDurationSecs         = 3 * 60 * 60 // 3 hours
@@ -16,4 +19,7 @@ const (
 
 var (
 	KZ_TZ = time.FixedZone("KZ", 5*60*60)
+
+	OnlineVideoIDPattern    = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
+	OnlinePlaylistIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{10,40}$`)
 )

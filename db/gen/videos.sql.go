@@ -201,6 +201,21 @@ func (q *Queries) GetVideoByID(ctx context.Context, videoID int64) (GetVideoByID
 	return i, err
 }
 
+const getVideoID = `-- name: GetVideoID :one
+SELECT
+    id
+FROM videos
+WHERE online_video_id = $1
+LIMIT 1
+`
+
+func (q *Queries) GetVideoID(ctx context.Context, onlineVideoID string) (int64, error) {
+	row := q.db.QueryRow(ctx, getVideoID, onlineVideoID)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const updateVideo = `-- name: UpdateVideo :exec
 UPDATE videos
 SET

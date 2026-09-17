@@ -18,6 +18,13 @@ FROM videos
 WHERE online_video_id = sqlc.arg('online_video_id')
 LIMIT 1;
 
+-- name: GetVideoID :one
+SELECT
+    id
+FROM videos
+WHERE online_video_id = sqlc.arg('online_video_id')
+LIMIT 1;
+
 -- name: GetVideoByID :one
 SELECT
     id,
