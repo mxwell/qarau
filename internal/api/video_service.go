@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -69,6 +70,10 @@ func NewVideoService(
 const (
 	maxQueueSize = 5
 	seqBeyondEnd = math.MaxInt32
+
+	hlPre                  = "<b>"
+	hlPost                 = "</b>"
+	sentencesSearchMaxSize = 20
 )
 
 func pgIntervalToInt32Seconds(interval *pgtype.Interval) int32 {
@@ -548,6 +553,74 @@ func (s *VideoService) GetOrCreateVideoProcess(ctx context.Context, videoID int6
 	}
 
 	return s.createVideoProcess(ctx, videoID)
+}
+
+type SentenceSearchResult struct {
+	OnlineVideoID   string   `json:"online_video_id"`
+	VideoTitle      string   `json:"video_title"`
+	ChannelTitle    string   `json:"channel_title"`
+	TranscriptionID int64    `json:"transcription_id"`
+	Seq             int32    `json:"seq"`
+	StartMs         int32    `json:"start_ms"`
+	EndMs           int32    `json:"end_ms"`
+	Text            string   `json:"text"`
+	HlParts         []string `json:"hl_parts"`
+}
+
+type SentencesSearchResponse struct {
+	Results []SentenceSearchResult `json:"results"`
+}
+
+func extractHlParts(hl string) []string {
+	parts := make([]string, 0)
+	for {
+		start := strings.Index(hl, hlPre)
+		if start < 0 {
+			break
+		}
+		hl = hl[start+len(hlPre):]
+
+		end := strings.Index(hl, hlPost)
+		if end < 0 {
+			break
+		}
+		parts = append(parts, hl[:end])
+		hl = hl[end+len(hlPost):]
+	}
+
+	return parts
+}
+
+func (s *VideoService) SentencesSearch(
+	ctx context.Context,
+	query string,
+) (SentencesSearchResponse, error) {
+	rows, err := s.queries.FindSentenceFts(ctx, dbgen.FindSentenceFtsParams{
+		Query: query,
+		Limit: sentencesSearchMaxSize,
+	})
+	if err != nil {
+		return SentencesSearchResponse{}, fmt.Errorf("FindSentenceFts fail: %w", err)
+	}
+
+	results := make([]SentenceSearchResult, 0, len(rows))
+	for _, row := range rows {
+		results = append(results, SentenceSearchResult{
+			OnlineVideoID:   row.OnlineVideoID,
+			VideoTitle:      row.Title,
+			ChannelTitle:    row.ChannelTitle,
+			TranscriptionID: row.TranscriptionID,
+			Seq:             row.Seq,
+			StartMs:         row.StartMs,
+			EndMs:           row.EndMs,
+			Text:            row.Text,
+			HlParts:         extractHlParts(string(row.Hl)),
+		})
+	}
+	s.log.Info("sentence search done", "results", len(results), "query", query)
+	return SentencesSearchResponse{
+		Results: results,
+	}, nil
 }
 
 type TranscriptionInfo struct {

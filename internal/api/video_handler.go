@@ -54,6 +54,7 @@ func (h *VideoHandler) Register(r fiber.Router) {
 	r.Get("/subtitles/:transcription_id", h.Subtitles)
 	r.Get("/breakdowns/:transcription_id", h.Breakdowns)
 	r.Post("/breakdowns/enqueue", h.EnqueueBreakdowns)
+	r.Get("/sentences/search", h.SentencesSearch)
 	r.Get("/export/:transcription_id", h.Export)
 
 	r.Get("/dash", h.Dash)
@@ -341,6 +342,26 @@ func (h *VideoHandler) EnqueueBreakdowns(c *fiber.Ctx) error {
 		return fiberutil.InternalError(c, "internal error")
 	}
 	return c.JSON(enqueueBreakdownsResponse)
+}
+
+func (h *VideoHandler) SentencesSearch(c *fiber.Ctx) error {
+	query := strings.TrimSpace(c.Query("q"))
+	if query == "" {
+		h.log.Info("empty query in SentencesSearch")
+		return fiberutil.BadRequest(c, "query required")
+	}
+	if len(query) > 256 {
+		h.log.Info("too long query in SentencesSearch", "len", len(query))
+		return fiberutil.BadRequest(c, "too long query")
+	}
+
+	response, err := h.svc.SentencesSearch(c.UserContext(), query)
+	if err != nil {
+		h.log.Error("SentencesSearch failed", "err", err)
+		return fiberutil.InternalError(c, "internal error")
+	}
+
+	return c.JSON(response)
 }
 
 func (h *VideoHandler) Export(c *fiber.Ctx) error {

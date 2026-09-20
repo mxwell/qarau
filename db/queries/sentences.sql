@@ -100,3 +100,32 @@ INSERT INTO sentence_breakdowns (
 )
 ON CONFLICT (transcription_id, sentence_seq, target_lang)
 DO NOTHING;
+
+-- name: FindSentenceFts :many
+WITH q AS (
+    SELECT websearch_to_tsquery('simple',     sqlc.arg('query')) AS exact_q,
+           websearch_to_tsquery('kazakh_cfg', sqlc.arg('query')) AS stem_q
+),
+hits AS (
+    SELECT s.transcription_id, s.seq, s.start_ms, s.end_ms, s.text,
+           ts_rank(s.fts, q.exact_q || q.stem_q) AS rank
+    FROM sentences s
+    CROSS JOIN q
+    WHERE s.fts @@ (q.exact_q || q.stem_q)
+    ORDER BY rank DESC, s.transcription_id, s.seq
+    LIMIT sqlc.arg('limit')
+)
+SELECT
+    h.transcription_id,
+    t.video_id,
+    v.online_video_id,
+    v.title,
+    v.channel_title,
+    h.seq, h.start_ms, h.end_ms, h.text, h.rank,
+    ts_headline('kazakh_cfg', h.text, q.exact_q || q.stem_q,
+        'StartSel=<b>, StopSel=</b>, HighlightAll=true') AS hl
+FROM hits h
+CROSS JOIN q
+JOIN transcriptions t ON t.id = h.transcription_id
+JOIN videos v         ON v.id = t.video_id
+ORDER BY h.rank DESC, h.transcription_id, h.seq;

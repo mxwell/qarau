@@ -31,6 +31,7 @@ type Querier interface {
 	// so asking again after a failure is what retries it. Returns the row either
 	// way; the caller reads `state` to decide what to tell the client.
 	EnqueueBreakdownBatch(ctx context.Context, arg EnqueueBreakdownBatchParams) (EnqueueBreakdownBatchRow, error)
+	FindSentenceFts(ctx context.Context, arg FindSentenceFtsParams) ([]FindSentenceFtsRow, error)
 	// The sentence being spoken at start_ms: the last one that has already begun.
 	// Returns no rows when start_ms precedes the first sentence — callers fall back
 	// to GetFirstSentenceSeq.

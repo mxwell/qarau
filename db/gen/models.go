@@ -203,13 +203,14 @@ type Playlist struct {
 }
 
 type Sentence struct {
-	TranscriptionID int64  `json:"transcription_id"`
-	Seq             int32  `json:"seq"`
-	StartWordSeq    int32  `json:"start_word_seq"`
-	EndWordSeq      int32  `json:"end_word_seq"`
-	StartMs         int32  `json:"start_ms"`
-	EndMs           int32  `json:"end_ms"`
-	Text            string `json:"text"`
+	TranscriptionID int64       `json:"transcription_id"`
+	Seq             int32       `json:"seq"`
+	StartWordSeq    int32       `json:"start_word_seq"`
+	EndWordSeq      int32       `json:"end_word_seq"`
+	StartMs         int32       `json:"start_ms"`
+	EndMs           int32       `json:"end_ms"`
+	Text            string      `json:"text"`
+	Fts             interface{} `json:"fts"`
 }
 
 type SentenceBreakdown struct {
