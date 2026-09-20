@@ -54,7 +54,8 @@ func (h *VideoHandler) Register(r fiber.Router) {
 	r.Get("/subtitles/:transcription_id", h.Subtitles)
 	r.Get("/breakdowns/:transcription_id", h.Breakdowns)
 	r.Post("/breakdowns/enqueue", h.EnqueueBreakdowns)
-	r.Get("/sentences/search", h.SentencesSearch)
+	r.Get("/transcriptions/search", h.SearchTranscriptions)
+	r.Get("/transcription/:transcription_id/search", h.SearchSentencesInTranscription)
 	r.Get("/export/:transcription_id", h.Export)
 
 	r.Get("/dash", h.Dash)
@@ -344,20 +345,53 @@ func (h *VideoHandler) EnqueueBreakdowns(c *fiber.Ctx) error {
 	return c.JSON(enqueueBreakdownsResponse)
 }
 
-func (h *VideoHandler) SentencesSearch(c *fiber.Ctx) error {
+// Initial request to retrieve a list of transcriptions that
+// match the query `q`. The sentence matches for transcription #1 are retrieved too.
+// Use `SearchSentencesInTranscription` to retrieve matching sentences
+// in transcriptions #2, #3 and so on.
+func (h *VideoHandler) SearchTranscriptions(c *fiber.Ctx) error {
 	query := strings.TrimSpace(c.Query("q"))
 	if query == "" {
-		h.log.Info("empty query in SentencesSearch")
+		h.log.Info("empty query in SearchTranscriptions")
 		return fiberutil.BadRequest(c, "query required")
 	}
 	if len(query) > 256 {
-		h.log.Info("too long query in SentencesSearch", "len", len(query))
+		h.log.Info("too long query in SearchTranscriptions", "len", len(query))
 		return fiberutil.BadRequest(c, "too long query")
 	}
 
-	response, err := h.svc.SentencesSearch(c.UserContext(), query)
+	response, err := h.svc.SearchTranscriptions(c.UserContext(), query)
 	if err != nil {
-		h.log.Error("SentencesSearch failed", "err", err)
+		h.log.Error("SearchTranscriptions failed", "err", err)
+		return fiberutil.InternalError(c, "internal error")
+	}
+
+	return c.JSON(response)
+}
+
+func (h *VideoHandler) SearchSentencesInTranscription(c *fiber.Ctx) error {
+	query := strings.TrimSpace(c.Query("q"))
+	if query == "" {
+		h.log.Info("empty query in SearchSentencesInTranscription")
+		return fiberutil.BadRequest(c, "query required")
+	}
+	if len(query) > 256 {
+		h.log.Info("too long query in SearchSentencesInTranscription", "len", len(query))
+		return fiberutil.BadRequest(c, "too long query")
+	}
+
+	transcriptionID, err := h.getTranscriptionIDParam(c)
+	if err != nil {
+		h.log.Info("failed to get transcription ID in SearchSentencesInTranscription", "err", err)
+		if errors.Is(err, errInvalidParam) {
+			return badRequest(c, "invalid transcription_id")
+		}
+		return fiberutil.BadRequest(c, "internal error")
+	}
+
+	response, err := h.svc.SearchSentencesInTranscription(c.UserContext(), transcriptionID, query)
+	if err != nil {
+		h.log.Error("SearchSentencesInTranscription failed", "err", err)
 		return fiberutil.InternalError(c, "internal error")
 	}
 

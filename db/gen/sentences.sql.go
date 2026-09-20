@@ -47,87 +47,6 @@ func (q *Queries) DeleteSentencesByTranscriptionId(ctx context.Context, transcri
 	return err
 }
 
-const findSentenceFts = `-- name: FindSentenceFts :many
-WITH q AS (
-    SELECT websearch_to_tsquery('simple',     $1) AS exact_q,
-           websearch_to_tsquery('kazakh_cfg', $1) AS stem_q
-),
-hits AS (
-    SELECT s.transcription_id, s.seq, s.start_ms, s.end_ms, s.text,
-           ts_rank(s.fts, q.exact_q || q.stem_q) AS rank
-    FROM sentences s
-    CROSS JOIN q
-    WHERE s.fts @@ (q.exact_q || q.stem_q)
-    ORDER BY rank DESC, s.transcription_id, s.seq
-    LIMIT $2
-)
-SELECT
-    h.transcription_id,
-    t.video_id,
-    v.online_video_id,
-    v.title,
-    v.channel_title,
-    h.seq, h.start_ms, h.end_ms, h.text, h.rank,
-    ts_headline('kazakh_cfg', h.text, q.exact_q || q.stem_q,
-        'StartSel=<b>, StopSel=</b>, HighlightAll=true') AS hl
-FROM hits h
-CROSS JOIN q
-JOIN transcriptions t ON t.id = h.transcription_id
-JOIN videos v         ON v.id = t.video_id
-ORDER BY h.rank DESC, h.transcription_id, h.seq
-`
-
-type FindSentenceFtsParams struct {
-	Query string `json:"query"`
-	Limit int32  `json:"limit"`
-}
-
-type FindSentenceFtsRow struct {
-	TranscriptionID int64   `json:"transcription_id"`
-	VideoID         int64   `json:"video_id"`
-	OnlineVideoID   string  `json:"online_video_id"`
-	Title           string  `json:"title"`
-	ChannelTitle    string  `json:"channel_title"`
-	Seq             int32   `json:"seq"`
-	StartMs         int32   `json:"start_ms"`
-	EndMs           int32   `json:"end_ms"`
-	Text            string  `json:"text"`
-	Rank            float32 `json:"rank"`
-	Hl              []byte  `json:"hl"`
-}
-
-func (q *Queries) FindSentenceFts(ctx context.Context, arg FindSentenceFtsParams) ([]FindSentenceFtsRow, error) {
-	rows, err := q.db.Query(ctx, findSentenceFts, arg.Query, arg.Limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []FindSentenceFtsRow
-	for rows.Next() {
-		var i FindSentenceFtsRow
-		if err := rows.Scan(
-			&i.TranscriptionID,
-			&i.VideoID,
-			&i.OnlineVideoID,
-			&i.Title,
-			&i.ChannelTitle,
-			&i.Seq,
-			&i.StartMs,
-			&i.EndMs,
-			&i.Text,
-			&i.Rank,
-			&i.Hl,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const findSentenceSeqByStartMs = `-- name: FindSentenceSeqByStartMs :one
 SELECT seq FROM sentences
 WHERE
@@ -335,4 +254,149 @@ type InsertSentencesParams struct {
 	StartMs         int32  `json:"start_ms"`
 	EndMs           int32  `json:"end_ms"`
 	Text            string `json:"text"`
+}
+
+const searchSentencesInTranscription = `-- name: SearchSentencesInTranscription :many
+WITH q AS (
+    SELECT websearch_to_tsquery('simple',     $1) AS exact_q,
+           websearch_to_tsquery('kazakh_cfg', $1) AS stem_q
+),
+hits AS (
+    SELECT s.seq, s.start_ms, s.end_ms, s.text,
+           ts_rank(s.fts, q.exact_q || q.stem_q) AS rank
+    FROM sentences s
+    CROSS JOIN q
+    WHERE s.transcription_id = $2
+    AND s.fts @@ (q.exact_q || q.stem_q)
+    ORDER BY rank DESC, s.seq
+    LIMIT $3
+)
+SELECT
+    hits.seq, hits.start_ms, hits.end_ms, hits.text, hits.rank,
+    ts_headline('kazakh_cfg', hits.text, q.exact_q || q.stem_q,
+        'StartSel=<b>, StopSel=</b>, HighlightAll=true') AS hl
+FROM hits
+CROSS JOIN q
+ORDER BY hits.rank DESC, hits.seq
+`
+
+type SearchSentencesInTranscriptionParams struct {
+	Query           string `json:"query"`
+	TranscriptionID int64  `json:"transcription_id"`
+	Limit           int32  `json:"limit"`
+}
+
+type SearchSentencesInTranscriptionRow struct {
+	Seq     int32   `json:"seq"`
+	StartMs int32   `json:"start_ms"`
+	EndMs   int32   `json:"end_ms"`
+	Text    string  `json:"text"`
+	Rank    float32 `json:"rank"`
+	Hl      []byte  `json:"hl"`
+}
+
+func (q *Queries) SearchSentencesInTranscription(ctx context.Context, arg SearchSentencesInTranscriptionParams) ([]SearchSentencesInTranscriptionRow, error) {
+	rows, err := q.db.Query(ctx, searchSentencesInTranscription, arg.Query, arg.TranscriptionID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchSentencesInTranscriptionRow
+	for rows.Next() {
+		var i SearchSentencesInTranscriptionRow
+		if err := rows.Scan(
+			&i.Seq,
+			&i.StartMs,
+			&i.EndMs,
+			&i.Text,
+			&i.Rank,
+			&i.Hl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchTranscriptions = `-- name: SearchTranscriptions :many
+WITH q AS (
+    SELECT websearch_to_tsquery('simple',     $1) AS exact_q,
+           websearch_to_tsquery('kazakh_cfg', $1) AS stem_q
+),
+matches AS (
+    SELECT s.transcription_id, s.seq, s.start_ms, s.end_ms, s.text,
+           ts_rank(s.fts, q.exact_q || q.stem_q) AS rank
+    FROM sentences s
+    CROSS JOIN q
+    WHERE s.fts @@ (q.exact_q || q.stem_q)
+),
+top AS (
+    SELECT matches.transcription_id,
+            MAX(matches.rank) AS best_rank,
+            COUNT(*)          AS match_count
+    FROM matches
+    GROUP BY matches.transcription_id
+    ORDER BY best_rank DESC, random()
+    LIMIT $2
+)
+SELECT
+    top.transcription_id,
+    top.best_rank,
+    top.match_count,
+    t.video_id,
+    v.online_video_id,
+    v.title,
+    v.channel_title
+FROM top
+JOIN transcriptions t ON t.id = top.transcription_id
+JOIN videos v         ON v.id = t.video_id
+ORDER BY top.best_rank DESC, top.transcription_id
+`
+
+type SearchTranscriptionsParams struct {
+	Query string `json:"query"`
+	Limit int32  `json:"limit"`
+}
+
+type SearchTranscriptionsRow struct {
+	TranscriptionID int64       `json:"transcription_id"`
+	BestRank        interface{} `json:"best_rank"`
+	MatchCount      int64       `json:"match_count"`
+	VideoID         int64       `json:"video_id"`
+	OnlineVideoID   string      `json:"online_video_id"`
+	Title           string      `json:"title"`
+	ChannelTitle    string      `json:"channel_title"`
+}
+
+// One transcription per video in practice, so one row here is one video.
+func (q *Queries) SearchTranscriptions(ctx context.Context, arg SearchTranscriptionsParams) ([]SearchTranscriptionsRow, error) {
+	rows, err := q.db.Query(ctx, searchTranscriptions, arg.Query, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchTranscriptionsRow
+	for rows.Next() {
+		var i SearchTranscriptionsRow
+		if err := rows.Scan(
+			&i.TranscriptionID,
+			&i.BestRank,
+			&i.MatchCount,
+			&i.VideoID,
+			&i.OnlineVideoID,
+			&i.Title,
+			&i.ChannelTitle,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

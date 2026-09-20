@@ -31,7 +31,6 @@ type Querier interface {
 	// so asking again after a failure is what retries it. Returns the row either
 	// way; the caller reads `state` to decide what to tell the client.
 	EnqueueBreakdownBatch(ctx context.Context, arg EnqueueBreakdownBatchParams) (EnqueueBreakdownBatchRow, error)
-	FindSentenceFts(ctx context.Context, arg FindSentenceFtsParams) ([]FindSentenceFtsRow, error)
 	// The sentence being spoken at start_ms: the last one that has already begun.
 	// Returns no rows when start_ms precedes the first sentence — callers fall back
 	// to GetFirstSentenceSeq.
@@ -84,6 +83,9 @@ type Querier interface {
 	// single topic, while still reshuffling on every request.
 	RecommendVideosByTopics(ctx context.Context, arg RecommendVideosByTopicsParams) ([]RecommendVideosByTopicsRow, error)
 	ResetVideoTopics(ctx context.Context, videoID int64) error
+	SearchSentencesInTranscription(ctx context.Context, arg SearchSentencesInTranscriptionParams) ([]SearchSentencesInTranscriptionRow, error)
+	// One transcription per video in practice, so one row here is one video.
+	SearchTranscriptions(ctx context.Context, arg SearchTranscriptionsParams) ([]SearchTranscriptionsRow, error)
 	SetVideoTopic(ctx context.Context, arg SetVideoTopicParams) error
 	UnlockJob(ctx context.Context, arg UnlockJobParams) (int64, error)
 	UpdatePlaylistDetails(ctx context.Context, arg UpdatePlaylistDetailsParams) error

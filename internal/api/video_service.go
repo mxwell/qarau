@@ -71,9 +71,9 @@ const (
 	maxQueueSize = 5
 	seqBeyondEnd = math.MaxInt32
 
-	hlPre                  = "<b>"
-	hlPost                 = "</b>"
-	sentencesSearchMaxSize = 20
+	hlPre            = "<b>"
+	hlPost           = "</b>"
+	searchMaxMatches = 20
 )
 
 func pgIntervalToInt32Seconds(interval *pgtype.Interval) int32 {
@@ -555,20 +555,12 @@ func (s *VideoService) GetOrCreateVideoProcess(ctx context.Context, videoID int6
 	return s.createVideoProcess(ctx, videoID)
 }
 
-type SentenceSearchResult struct {
-	OnlineVideoID   string   `json:"online_video_id"`
-	VideoTitle      string   `json:"video_title"`
-	ChannelTitle    string   `json:"channel_title"`
-	TranscriptionID int64    `json:"transcription_id"`
-	Seq             int32    `json:"seq"`
-	StartMs         int32    `json:"start_ms"`
-	EndMs           int32    `json:"end_ms"`
-	Text            string   `json:"text"`
-	HlParts         []string `json:"hl_parts"`
-}
-
-type SentencesSearchResponse struct {
-	Results []SentenceSearchResult `json:"results"`
+type SearchTranscriptionsResult struct {
+	TranscriptionID int64  `json:"transcription_id"`
+	Matches         int64  `json:"matches"`
+	OnlineVideoID   string `json:"online_video_id"`
+	VideoTitle      string `json:"video_title"`
+	ChannelTitle    string `json:"channel_title"`
 }
 
 func extractHlParts(hl string) []string {
@@ -591,34 +583,119 @@ func extractHlParts(hl string) []string {
 	return parts
 }
 
-func (s *VideoService) SentencesSearch(
+type SearchSentencesResult struct {
+	Seq     int32    `json:"seq"`
+	StartMs int32    `json:"start_ms"`
+	EndMs   int32    `json:"end_ms"`
+	Text    string   `json:"text"`
+	HlParts []string `json:"hl_parts"`
+}
+
+type SearchTranscriptionsResponse struct {
+	Transcriptions []SearchTranscriptionsResult `json:"transcriptions"`
+	First          []SearchSentencesResult      `json:"first"`
+}
+
+func (s *VideoService) SearchTranscriptions(
 	ctx context.Context,
 	query string,
-) (SentencesSearchResponse, error) {
-	rows, err := s.queries.FindSentenceFts(ctx, dbgen.FindSentenceFtsParams{
+) (SearchTranscriptionsResponse, error) {
+	rows, err := s.queries.SearchTranscriptions(ctx, dbgen.SearchTranscriptionsParams{
 		Query: query,
-		Limit: sentencesSearchMaxSize,
+		Limit: searchMaxMatches,
 	})
 	if err != nil {
-		return SentencesSearchResponse{}, fmt.Errorf("FindSentenceFts fail: %w", err)
+		return SearchTranscriptionsResponse{}, fmt.Errorf("SearchTranscriptions fail: %w", err)
+	}
+	if len(rows) == 0 {
+		return SearchTranscriptionsResponse{
+			Transcriptions: []SearchTranscriptionsResult{},
+			First:          []SearchSentencesResult{},
+		}, nil
 	}
 
-	results := make([]SentenceSearchResult, 0, len(rows))
+	transcriptions := make([]SearchTranscriptionsResult, 0, len(rows))
 	for _, row := range rows {
-		results = append(results, SentenceSearchResult{
+		transcriptions = append(transcriptions, SearchTranscriptionsResult{
+			TranscriptionID: row.TranscriptionID,
+			Matches:         row.MatchCount,
 			OnlineVideoID:   row.OnlineVideoID,
 			VideoTitle:      row.Title,
 			ChannelTitle:    row.ChannelTitle,
-			TranscriptionID: row.TranscriptionID,
-			Seq:             row.Seq,
-			StartMs:         row.StartMs,
-			EndMs:           row.EndMs,
-			Text:            row.Text,
-			HlParts:         extractHlParts(string(row.Hl)),
 		})
 	}
-	s.log.Info("sentence search done", "results", len(results), "query", query)
-	return SentencesSearchResponse{
+	s.log.Info("found transcriptions for query", "transcriptions", len(transcriptions), "query", query)
+
+	transcriptionID := transcriptions[0].TranscriptionID
+
+	sentenceRows, err := s.queries.SearchSentencesInTranscription(ctx, dbgen.SearchSentencesInTranscriptionParams{
+		Query:           query,
+		TranscriptionID: transcriptionID,
+		Limit:           searchMaxMatches,
+	})
+	if err != nil {
+		return SearchTranscriptionsResponse{}, fmt.Errorf("SearchSentencesInTranscription fail: %w", err)
+	}
+
+	if len(sentenceRows) == 0 {
+		s.log.Error("no sentence matches loaded for first transcription", "transcription", transcriptionID)
+		return SearchTranscriptionsResponse{}, fmt.Errorf("failed to load sentence matches")
+	}
+
+	first := make([]SearchSentencesResult, 0, len(sentenceRows))
+	for _, row := range sentenceRows {
+		first = append(first, SearchSentencesResult{
+			Seq:     row.Seq,
+			StartMs: row.StartMs,
+			EndMs:   row.EndMs,
+			Text:    row.Text,
+			HlParts: extractHlParts(string(row.Hl)),
+		})
+	}
+
+	return SearchTranscriptionsResponse{
+		Transcriptions: transcriptions,
+		First:          first,
+	}, nil
+}
+
+type SearchSentencesResponse struct {
+	Results []SearchSentencesResult `json:"results"`
+}
+
+func (s *VideoService) SearchSentencesInTranscription(
+	ctx context.Context,
+	transcriptionID int64,
+	query string,
+) (SearchSentencesResponse, error) {
+	sentenceRows, err := s.queries.SearchSentencesInTranscription(ctx, dbgen.SearchSentencesInTranscriptionParams{
+		Query:           query,
+		TranscriptionID: transcriptionID,
+		Limit:           searchMaxMatches,
+	})
+	if err != nil {
+		return SearchSentencesResponse{}, fmt.Errorf("SearchSentencesInTranscription fail: %w", err)
+	}
+
+	if len(sentenceRows) == 0 {
+		s.log.Error("no sentence matches for transcription", "transcription", transcriptionID)
+		return SearchSentencesResponse{
+			Results: []SearchSentencesResult{},
+		}, nil
+	}
+
+	results := make([]SearchSentencesResult, 0, len(sentenceRows))
+	for _, row := range sentenceRows {
+		results = append(results, SearchSentencesResult{
+			Seq:     row.Seq,
+			StartMs: row.StartMs,
+			EndMs:   row.EndMs,
+			Text:    row.Text,
+			HlParts: extractHlParts(string(row.Hl)),
+		})
+	}
+
+	return SearchSentencesResponse{
 		Results: results,
 	}, nil
 }

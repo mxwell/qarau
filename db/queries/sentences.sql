@@ -101,31 +101,60 @@ INSERT INTO sentence_breakdowns (
 ON CONFLICT (transcription_id, sentence_seq, target_lang)
 DO NOTHING;
 
--- name: FindSentenceFts :many
+-- name: SearchTranscriptions :many
 WITH q AS (
     SELECT websearch_to_tsquery('simple',     sqlc.arg('query')) AS exact_q,
            websearch_to_tsquery('kazakh_cfg', sqlc.arg('query')) AS stem_q
 ),
-hits AS (
+matches AS (
     SELECT s.transcription_id, s.seq, s.start_ms, s.end_ms, s.text,
            ts_rank(s.fts, q.exact_q || q.stem_q) AS rank
     FROM sentences s
     CROSS JOIN q
     WHERE s.fts @@ (q.exact_q || q.stem_q)
-    ORDER BY rank DESC, s.transcription_id, s.seq
+),
+-- One transcription per video in practice, so one row here is one video.
+top AS (
+    SELECT matches.transcription_id,
+            MAX(matches.rank) AS best_rank,
+            COUNT(*)          AS match_count
+    FROM matches
+    GROUP BY matches.transcription_id
+    ORDER BY best_rank DESC, random()
     LIMIT sqlc.arg('limit')
 )
 SELECT
-    h.transcription_id,
+    top.transcription_id,
+    top.best_rank,
+    top.match_count,
     t.video_id,
     v.online_video_id,
     v.title,
-    v.channel_title,
-    h.seq, h.start_ms, h.end_ms, h.text, h.rank,
-    ts_headline('kazakh_cfg', h.text, q.exact_q || q.stem_q,
-        'StartSel=<b>, StopSel=</b>, HighlightAll=true') AS hl
-FROM hits h
-CROSS JOIN q
-JOIN transcriptions t ON t.id = h.transcription_id
+    v.channel_title
+FROM top
+JOIN transcriptions t ON t.id = top.transcription_id
 JOIN videos v         ON v.id = t.video_id
-ORDER BY h.rank DESC, h.transcription_id, h.seq;
+ORDER BY top.best_rank DESC, top.transcription_id;
+
+-- name: SearchSentencesInTranscription :many
+WITH q AS (
+    SELECT websearch_to_tsquery('simple',     sqlc.arg('query')) AS exact_q,
+           websearch_to_tsquery('kazakh_cfg', sqlc.arg('query')) AS stem_q
+),
+hits AS (
+    SELECT s.seq, s.start_ms, s.end_ms, s.text,
+           ts_rank(s.fts, q.exact_q || q.stem_q) AS rank
+    FROM sentences s
+    CROSS JOIN q
+    WHERE s.transcription_id = sqlc.arg('transcription_id')
+    AND s.fts @@ (q.exact_q || q.stem_q)
+    ORDER BY rank DESC, s.seq
+    LIMIT sqlc.arg('limit')
+)
+SELECT
+    hits.seq, hits.start_ms, hits.end_ms, hits.text, hits.rank,
+    ts_headline('kazakh_cfg', hits.text, q.exact_q || q.stem_q,
+        'StartSel=<b>, StopSel=</b>, HighlightAll=true') AS hl
+FROM hits
+CROSS JOIN q
+ORDER BY hits.rank DESC, hits.seq;
