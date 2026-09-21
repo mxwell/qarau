@@ -199,3 +199,13 @@ curl -sS \
   -d '{"transcription_id": NUM}' \
   https://qarau.khairulin.com/qarauadmin/api/v1/backfill_sentences
 ```
+
+## Search
+
+Uses PostgreSQL extension for Kazakh stemming: https://github.com/darkhanakh/pg-kazsearch
+
+To add such extension, one needs more privileges than for a regular migration. So run this command ahead of the migration that uses the extension:
+
+```bash
+sudo -u postgres psql -d qaraudb -c 'CREATE EXTENSION IF NOT EXISTS pg_kazsearch;'
+```
