@@ -12,6 +12,7 @@ import (
 	"math/rand/v2"
 	"mime/multipart"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -42,6 +43,7 @@ const (
 	diarize          = "true"
 	granularity      = "word"
 
+	timeEps            = 1e-6
 	partMinFrames      = 7 * 60 * audio.SampleRateHz // min part size is 7 minutes
 	partsMax           = 10                          // 11labs API limit is 20 concurrent jobs
 	apiRequestAttempts = 3
@@ -278,24 +280,181 @@ func (t *elevenTranscriber) requestWithRetries(ctx context.Context, pcm []byte, 
 	return nil, fmt.Errorf("STT request fail after %d attempts", attempts)
 }
 
-func (t *elevenTranscriber) applyVad(f32Data []float32) ([]speech.Segment, error) {
-	frames := len(f32Data)
-	t.detector.Reset() // detector accumulates state across runs, let's reset it
-	segments, err := t.detector.Detect(f32Data)
-	if err != nil {
-		t.logger.Error("vad failed", "frames", frames, "err", err)
-		return nil, fmt.Errorf("vad fail: %w", err)
+func finalizeSegmentSlice(segments []speech.Segment, rangeEndSecs float64) []speech.Segment {
+	count := len(segments)
+	if count > 0 {
+		lastEnd := segments[count-1].SpeechEndAt
+		if lastEnd < timeEps {
+			segments[count-1].SpeechEndAt = rangeEndSecs
+		}
 	}
-	t.logger.Info("vad applied", "frames", frames, "segments", len(segments))
-	return segments, nil
+	return segments
+}
+
+// Param `segments`: should be finalized = the last segment should have the end value set
+func adjustSegmentValues(segments []speech.Segment, rangeStartSecs, rangeEndSecs float64) error {
+	for i := range segments {
+		segments[i].SpeechStartAt += rangeStartSecs
+		segments[i].SpeechEndAt += rangeStartSecs
+		if segments[i].SpeechEndAt > rangeEndSecs+timeEps {
+			return fmt.Errorf(
+				"speech segment end %f is out of range at %d/%d: [%f,%f]",
+				segments[i].SpeechEndAt,
+				i,
+				len(segments),
+				rangeStartSecs,
+				rangeEndSecs,
+			)
+		}
+	}
+	return nil
+}
+
+// Param `body` should be finalized: the last segment end should be set, the slice can be empty
+//
+// Param `bodyRangeStartSecs`: start of the period covered by `body`
+//
+// Param `bodyRangeEndSecs`: end (exclusive) of the period that
+// was used as input to get `body`, but also an inclusive start
+// of the period covered by `tail`
+//
+// Param `tailRangeEndSecs`: end (exclusive) of the period covered by `tail`
+//
+// Param `tail` should be finalized, the slice can be empty
+func (t *elevenTranscriber) concatSegments(
+	body []speech.Segment,
+	bodyRangeStartSecs, bodyRangeEndSecs float64,
+	tail []speech.Segment,
+	tailRangeEndSecs float64,
+) []speech.Segment {
+	blen := len(body)
+	if blen == 0 {
+		t.logger.Info("no left side in concatenation")
+		return tail
+	}
+	tlen := len(tail)
+	if tlen == 0 {
+		t.logger.Info("no right side in concatenation")
+		return body
+	}
+
+	// min duration at the body end and tail start to include into the result
+	const seamRadiusSecs = 1
+	const eps = 1e-6
+	seamStart := max(bodyRangeStartSecs, bodyRangeEndSecs-seamRadiusSecs)
+	seamEnd := min(bodyRangeEndSecs+seamRadiusSecs, tailRangeEndSecs)
+
+	if body[blen-1].SpeechEndAt > seamStart-eps {
+		newSeamStart := body[blen-1].SpeechStartAt
+		t.logger.Debug("seam start adjusted", "prev", seamStart, "new", newSeamStart)
+		seamStart = newSeamStart
+		body = body[:blen-1]
+	}
+
+	if tail[0].SpeechStartAt < seamEnd+eps {
+		newSeamEnd := tail[0].SpeechEndAt
+		t.logger.Debug("seam end adjusted", "prev", seamEnd, "new", newSeamEnd)
+		seamEnd = newSeamEnd
+		tail = tail[1:]
+	}
+
+	result := append(body, speech.Segment{
+		SpeechStartAt: seamStart,
+		SpeechEndAt:   seamEnd,
+	})
+	t.logger.Debug("seam inserted", "start", seamStart, "end", seamEnd)
+	return append(result, tail...)
+}
+
+func (t *elevenTranscriber) applyVadLowMem(pcm []byte) ([]speech.Segment, error) {
+	var allSegments []speech.Segment
+
+	// 262s, 16 MiB of float32 frames, ~2.4% of 3h long audio
+	// must be multiple of 512 (if 16kHz)
+	const chunkMaxFrames = 4_194_304
+
+	totalFrames := len(pcm) / 2
+	t.logger.Info("applying vad", "frames", totalFrames)
+
+	bufferFrames := min(totalFrames, chunkMaxFrames)
+	buffer := make([]float32, bufferFrames)
+
+	offsetFrames := 0
+	skippedFrames := 0
+	processedChunks := 0
+	for offsetFrames < totalFrames {
+		frames := min(chunkMaxFrames, totalFrames-offsetFrames)
+
+		// Detector doesn't like a window shorter than 32ms,
+		// which might happen at the end: we skip it
+		if frames < 512 {
+			offsetFrames += frames
+			skippedFrames += frames
+			break
+		}
+
+		pcmStart := offsetFrames * 2
+		pcmEnd := pcmStart + frames*2
+		err := audio.Convert16BitBytesToF32WithBuffer(pcm[pcmStart:pcmEnd], buffer)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert pcm bytes to float32: %w", err)
+		}
+		f32Data := buffer[:frames]
+
+		t.detector.Reset() // detector accumulates state across runs, let's reset it
+		chunkSegments, err := t.detector.Detect(f32Data)
+		if err != nil {
+			t.logger.Error("vad failed", "frames", frames, "offset", offsetFrames, "err", err)
+			return nil, fmt.Errorf("vad fail: %w", err)
+		}
+		rangeStartSecs := float64(offsetFrames) / constants.PcmSampleRate
+		rangeDuration := float64(frames) / constants.PcmSampleRate
+		rangeEndSecs := rangeStartSecs + rangeDuration
+		finalizeSegmentSlice(chunkSegments, rangeDuration)
+		err = adjustSegmentValues(chunkSegments, rangeStartSecs, rangeEndSecs)
+		if err != nil {
+			t.logger.Error("speech segment adjustment failed", "offset", offsetFrames, "err", err)
+			return nil, fmt.Errorf("failed to adjust speech segments: %w", err)
+		}
+
+		allSegments = t.concatSegments(allSegments, 0, rangeStartSecs, chunkSegments, rangeEndSecs)
+		t.logger.Info("segments concatenation", "allSegments", len(allSegments), "chunkSegments", len(chunkSegments))
+
+		offsetFrames += frames
+		processedChunks++
+	}
+
+	if offsetFrames != totalFrames {
+		return nil, fmt.Errorf(
+			"processed frames mismatch: %d instead of %d",
+			offsetFrames, totalFrames,
+		)
+	}
+
+	t.logger.Info(
+		"vad applied",
+		"frames", offsetFrames,
+		"skipped", skippedFrames,
+		"segments", len(allSegments),
+		"chunks", processedChunks,
+	)
+	return allSegments, nil
 }
 
 func printDetectedTimestamps(timestamps []speech.Segment) {
-	parts := make([]string, 0)
-	for i := range timestamps {
-		parts = append(parts, fmt.Sprintf("%f-%f", timestamps[i].SpeechStartAt, timestamps[i].SpeechEndAt))
+	filename := "speech_segs.txt"
+	f, err := os.OpenFile(filename, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		fmt.Printf("failed to open %s: %s\n", filename, err.Error())
+		return
 	}
-	fmt.Println("Detected timestamps", strings.Join(parts, "  "))
+	defer f.Close()
+
+	fmt.Fprintf(f, "detected %d timestamps\n", len(timestamps))
+	for i := range timestamps {
+		fmt.Fprintf(f, "%.3f - %.3f\n", timestamps[i].SpeechStartAt, timestamps[i].SpeechEndAt)
+	}
+	fmt.Printf("%d detected timestamps written to %s\n", len(timestamps), filename)
 }
 
 func printFragments(fragments []vad.Fragment) {
@@ -471,12 +630,7 @@ func (t *elevenTranscriber) Transcribe(
 		return nil, fmt.Errorf("too large audio data size: %f Bytes", pcmSize)
 	}
 
-	f32Data, err := audio.Convert16BitBytesToF32(pcm)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert pcm bytes to float32: %w", err)
-	}
-
-	speechSegments, err := t.applyVad(f32Data)
+	speechSegments, err := t.applyVadLowMem(pcm)
 	if err != nil {
 		return nil, err
 	}

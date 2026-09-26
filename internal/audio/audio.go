@@ -23,13 +23,24 @@ func MakeF32OfBytes(lower byte, upper byte) float32 {
 
 func Convert16BitBytesToF32(pcm []byte) ([]float32, error) {
 	frames := len(pcm) / BytesPer16bitFrame
-	if frames*BytesPer16bitFrame != len(pcm) {
-		return nil, fmt.Errorf("incomplete frames in pcm: size %d", len(pcm))
-	}
 	f32Data := make([]float32, frames)
-	for i := range frames {
-		f32 := MakeF32OfBytes(pcm[i*2], pcm[i*2+1])
-		f32Data[i] = f32 // values are in the [-1.0, 1.0] range
+	if err := Convert16BitBytesToF32WithBuffer(pcm, f32Data); err != nil {
+		return nil, err
 	}
 	return f32Data, nil
+}
+
+func Convert16BitBytesToF32WithBuffer(pcm []byte, output []float32) error {
+	frames := len(pcm) / BytesPer16bitFrame
+	if frames*BytesPer16bitFrame != len(pcm) {
+		return fmt.Errorf("incomplete frames in pcm: size %d", len(pcm))
+	}
+	if len(output) < frames {
+		return fmt.Errorf("output buffer too small: %d < %d", len(output), frames)
+	}
+	for i := range frames {
+		f32 := MakeF32OfBytes(pcm[i*2], pcm[i*2+1])
+		output[i] = f32 // values are in the [-1.0, 1.0] range
+	}
+	return nil
 }
