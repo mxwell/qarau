@@ -158,3 +158,13 @@ SELECT
 FROM hits
 CROSS JOIN q
 ORDER BY hits.rank DESC, hits.seq;
+
+-- name: GetRandomSentenceKeys :many
+SELECT
+    transcription_id,
+    seq
+FROM sentences
+WHERE
+    seq > 0 AND seq % sqlc.arg('batch') = 0
+ORDER BY random()
+LIMIT sqlc.arg('limit');

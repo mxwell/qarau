@@ -37,6 +37,7 @@ func (h *AdminHandler) Register(r fiber.Router) {
 	r.Get("/jobs", h.ListJobs)
 	r.Post("/backfill_sentences", h.BackfillSentences)
 	r.Post("/set_video_topics", h.SetVideoTopics)
+	r.Get("/generate_eval_set", h.GenerateEvalSet)
 }
 
 func AdminAuth(token string) fiber.Handler {
@@ -133,4 +134,13 @@ func (h *AdminHandler) SetVideoTopics(c *fiber.Ctx) error {
 	return c.JSON(SetVideoTopicsResponse{
 		Ok: true,
 	})
+}
+
+func (h *AdminHandler) GenerateEvalSet(c *fiber.Ctx) error {
+	response, err := h.svc.GenerateEvalSet(c.UserContext())
+	if err != nil {
+		h.log.Error("failed to generate eval set", "err", err)
+		return fiberutil.InternalError(c, "failed to generate eval set")
+	}
+	return c.JSON(response)
 }

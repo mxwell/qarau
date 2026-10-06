@@ -84,6 +84,8 @@ LIMIT 1;
 
 -- name: GetVideoByTranscriptionID :one
 SELECT
+    v.id,
+    v.online_video_id,
     v.title,
     v.channel_title
 FROM

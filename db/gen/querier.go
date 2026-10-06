@@ -48,6 +48,7 @@ type Querier interface {
 	GetLastBreakdownBatches(ctx context.Context, batches int32) ([]GetLastBreakdownBatchesRow, error)
 	GetLastJobs(ctx context.Context, jobs int32) ([]GetLastJobsRow, error)
 	GetLlmQuota(ctx context.Context, day pgtype.Date) (GetLlmQuotaRow, error)
+	GetRandomSentenceKeys(ctx context.Context, arg GetRandomSentenceKeysParams) ([]GetRandomSentenceKeysRow, error)
 	// Whatever breakdown exists for these sentences, regardless of which model or
 	// prompt produced it.
 	GetSentenceBreakdowns(ctx context.Context, arg GetSentenceBreakdownsParams) ([]GetSentenceBreakdownsRow, error)

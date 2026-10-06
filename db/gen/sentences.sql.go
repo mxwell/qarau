@@ -85,6 +85,47 @@ func (q *Queries) GetFirstSentenceSeq(ctx context.Context, transcriptionID int64
 	return seq, err
 }
 
+const getRandomSentenceKeys = `-- name: GetRandomSentenceKeys :many
+SELECT
+    transcription_id,
+    seq
+FROM sentences
+WHERE
+    seq > 0 AND seq % $1 = 0
+ORDER BY random()
+LIMIT $2
+`
+
+type GetRandomSentenceKeysParams struct {
+	Batch int32 `json:"batch"`
+	Limit int32 `json:"limit"`
+}
+
+type GetRandomSentenceKeysRow struct {
+	TranscriptionID int64 `json:"transcription_id"`
+	Seq             int32 `json:"seq"`
+}
+
+func (q *Queries) GetRandomSentenceKeys(ctx context.Context, arg GetRandomSentenceKeysParams) ([]GetRandomSentenceKeysRow, error) {
+	rows, err := q.db.Query(ctx, getRandomSentenceKeys, arg.Batch, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetRandomSentenceKeysRow
+	for rows.Next() {
+		var i GetRandomSentenceKeysRow
+		if err := rows.Scan(&i.TranscriptionID, &i.Seq); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getSentenceBreakdowns = `-- name: GetSentenceBreakdowns :many
 SELECT
     sentence_seq,

@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	dbgen "github.com/mxwell/qarau/db/gen"
 	"github.com/mxwell/qarau/internal/api"
+	"github.com/mxwell/qarau/internal/constants"
 	"github.com/mxwell/qarau/internal/recommend"
 )
 
@@ -143,4 +144,102 @@ func (s *AdminService) SetVideoTopics(ctx context.Context, onlineVideoID string,
 	}
 
 	return tx.Commit(ctx)
+}
+
+type EvalSetBatch struct {
+	VideoID       int64    `json:"video_id"`
+	OnlineVideoID string   `json:"online_video_id"`
+	VideoTitle    string   `json:"video_title"`
+	ChannelTitle  string   `json:"channel_title"`
+	StartSentSeq  int32    `json:"start_sent_seq"`
+	Sentences     []string `json:"sentences"`
+}
+
+type GenerateEvalSetResponse struct {
+	Batches []EvalSetBatch `json:"batches"`
+}
+
+func (s *AdminService) GenerateEvalSet(ctx context.Context) (GenerateEvalSetResponse, error) {
+	const (
+		randomSentLimit = 100
+		evalSetBatches  = 5
+	)
+
+	randomSentKeys, err := s.queries.GetRandomSentenceKeys(ctx, dbgen.GetRandomSentenceKeysParams{
+		Batch: constants.SentenceBatchSize,
+		Limit: randomSentLimit,
+	})
+	if err != nil {
+		s.log.Error(
+			"random sent keys fail",
+			"limit", randomSentLimit,
+			"batch", constants.SentenceBatchSize,
+			"err", err,
+		)
+		return GenerateEvalSetResponse{}, err
+	}
+	usedTranscriptionIds := make(map[int64]bool)
+
+	sampleKeys := make([]dbgen.GetRandomSentenceKeysRow, 0, evalSetBatches)
+	for _, row := range randomSentKeys {
+		if len(sampleKeys) >= evalSetBatches {
+			break
+		}
+		if _, used := usedTranscriptionIds[row.TranscriptionID]; used {
+			continue
+		}
+		usedTranscriptionIds[row.TranscriptionID] = true
+		sampleKeys = append(sampleKeys, dbgen.GetRandomSentenceKeysRow{
+			TranscriptionID: row.TranscriptionID,
+			Seq:             row.Seq - constants.SentenceBatchSize,
+		})
+	}
+
+	if len(sampleKeys) < evalSetBatches {
+		s.log.Error(
+			"failed to sample enough data for eval set",
+			"keys", len(sampleKeys),
+			"unfiltered", len(randomSentKeys),
+		)
+		return GenerateEvalSetResponse{}, errors.New("not enough data")
+	}
+
+	batches := make([]EvalSetBatch, 0, len(sampleKeys))
+	for _, row := range sampleKeys {
+		transcriptionID := row.TranscriptionID
+		sents, err := s.queries.GetSentencesRange(ctx, dbgen.GetSentencesRangeParams{
+			TranscriptionID: transcriptionID,
+			StartSeq:        row.Seq,
+			EndSeq:          row.Seq + constants.SentenceBatchSize,
+		})
+		if err != nil {
+			s.log.Error("failed to load sentences for eval set", "err", err)
+			return GenerateEvalSetResponse{}, fmt.Errorf("failed to load sentences for eval set: %w", err)
+		}
+		sentStrings := make([]string, len(sents))
+		for i := range sents {
+			sentStrings[i] = sents[i].Text
+		}
+		video, err := s.queries.GetVideoByTranscriptionID(ctx, transcriptionID)
+		if err != nil {
+			s.log.Error(
+				"failed to load video details for eval set",
+				"transcription", transcriptionID,
+				"err", err,
+			)
+			return GenerateEvalSetResponse{}, fmt.Errorf("failed to load video details: %w", err)
+		}
+		batches = append(batches, EvalSetBatch{
+			VideoID:       video.ID,
+			OnlineVideoID: video.OnlineVideoID,
+			VideoTitle:    video.Title,
+			ChannelTitle:  video.ChannelTitle,
+			StartSentSeq:  row.Seq,
+			Sentences:     sentStrings,
+		})
+	}
+
+	return GenerateEvalSetResponse{
+		Batches: batches,
+	}, nil
 }

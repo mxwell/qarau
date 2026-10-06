@@ -177,6 +177,8 @@ func (q *Queries) GetTranscriptionsByVideoID(ctx context.Context, videoID int64)
 
 const getVideoByTranscriptionID = `-- name: GetVideoByTranscriptionID :one
 SELECT
+    v.id,
+    v.online_video_id,
     v.title,
     v.channel_title
 FROM
@@ -189,14 +191,21 @@ WHERE
 `
 
 type GetVideoByTranscriptionIDRow struct {
-	Title        string `json:"title"`
-	ChannelTitle string `json:"channel_title"`
+	ID            int64  `json:"id"`
+	OnlineVideoID string `json:"online_video_id"`
+	Title         string `json:"title"`
+	ChannelTitle  string `json:"channel_title"`
 }
 
 func (q *Queries) GetVideoByTranscriptionID(ctx context.Context, transcriptionID int64) (GetVideoByTranscriptionIDRow, error) {
 	row := q.db.QueryRow(ctx, getVideoByTranscriptionID, transcriptionID)
 	var i GetVideoByTranscriptionIDRow
-	err := row.Scan(&i.Title, &i.ChannelTitle)
+	err := row.Scan(
+		&i.ID,
+		&i.OnlineVideoID,
+		&i.Title,
+		&i.ChannelTitle,
+	)
 	return i, err
 }
 
