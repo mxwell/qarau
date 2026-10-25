@@ -68,6 +68,11 @@ func (c OaiClient) streamSentenceBreakdownRuV1(
 	}()
 
 	collected, decodeErr := c.decodeSentenceStream(reader, promptStart, metadata, onSentence)
+	if decodeErr == nil {
+		// The decoder stops at the sentences array's closing bracket; drain the
+		// tail so the pump isn't cut off before response.completed.
+		_, decodeErr = io.Copy(io.Discard, reader)
+	}
 	// Unblock the pump if we stopped reading early, e.g. on a decode error.
 	reader.CloseWithError(decodeErr)
 
