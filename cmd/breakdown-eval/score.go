@@ -13,6 +13,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/mxwell/qarau/internal/evalset"
+	"github.com/mxwell/qarau/internal/pricing"
 )
 
 const (
@@ -83,7 +84,7 @@ func b2f(b bool) float64 {
 
 // Per-record counters. Ratios are aggregated as sum(num)/sum(den), so
 // longer sentences and batches weigh proportionally more.
-func scoreRecord(rec RunRecord, prices map[string]Price) stats {
+func scoreRecord(rec RunRecord, prices map[string]pricing.Price) stats {
 	s := stats{}
 	n := float64(len(rec.Sentences))
 	s.add("calls_ok", b2f(rec.Error == ""), 1)
@@ -185,7 +186,7 @@ func (c *configResult) perBatch() map[int]stats {
 	return result
 }
 
-func loadConfig(dir, name string, prices map[string]Price) (*configResult, error) {
+func loadConfig(dir, name string, prices map[string]pricing.Price) (*configResult, error) {
 	paths, err := filepath.Glob(filepath.Join(dir, "b*.r*.json"))
 	if err != nil {
 		return nil, err
@@ -314,7 +315,7 @@ func scoreCmd(args []string) error {
 	if err != nil {
 		return err
 	}
-	prices, err := loadPrices(*dir)
+	prices, err := pricing.All()
 	if err != nil {
 		return err
 	}

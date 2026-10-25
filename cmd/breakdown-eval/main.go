@@ -9,7 +9,6 @@
 //
 //	eval/
 //	├── eval_set.20261006.json                  # copied from the admin endpoint output
-//	├── prices.json                             # optional: {"<model>": {"input": 0.4, "output": 1.6}} per 1M tokens
 //	├── runs/eval_set.20261006/v2@gpt-5.6-luna/b00.r1.json
 //	└── view/eval_set.20261006.html
 package main
@@ -68,11 +67,6 @@ type RunRecord struct {
 	Output       []SentenceOutput `json:"output,omitempty"`
 }
 
-type Price struct {
-	Input  float64 `json:"input"`
-	Output float64 `json:"output"`
-}
-
 func parsePromptVersion(s string) (uint, error) {
 	if !strings.HasPrefix(s, "v") {
 		return 0, fmt.Errorf("prompt must look like v1, v2, ...: %q", s)
@@ -121,21 +115,6 @@ func loadSet(dir, name string) (evalset.Set, string, error) {
 		}
 	}
 	return set, strings.TrimSuffix(name, filepath.Ext(name)), nil
-}
-
-func loadPrices(dir string) (map[string]Price, error) {
-	prices := map[string]Price{}
-	data, err := os.ReadFile(filepath.Join(dir, "prices.json"))
-	if errors.Is(err, os.ErrNotExist) {
-		return prices, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	if err = json.Unmarshal(data, &prices); err != nil {
-		return nil, fmt.Errorf("prices.json parse fail: %w", err)
-	}
-	return prices, nil
 }
 
 func runFileName(batchIndex, repeat int) string {

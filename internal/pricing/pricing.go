@@ -15,15 +15,23 @@ type Price struct {
 //go:embed prices.json
 var pricesJson []byte
 
+func All() (map[string]Price, error) {
+	var prices map[string]Price
+	if err := json.Unmarshal(pricesJson, &prices); err != nil {
+		return nil, fmt.Errorf("prices.json parse fail: %w", err)
+	}
+	return prices, nil
+}
+
 func Lookup(model string) (Price, error) {
 	const (
 		minPrice = 1e-6
 		maxPrice = 10
 	)
 
-	var prices map[string]Price
-	if err := json.Unmarshal(pricesJson, &prices); err != nil {
-		return Price{}, fmt.Errorf("prices.json parse fail: %w", err)
+	prices, err := All()
+	if err != nil {
+		return Price{}, err
 	}
 
 	price, ok := prices[model]

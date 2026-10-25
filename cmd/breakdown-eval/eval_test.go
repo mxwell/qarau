@@ -4,6 +4,8 @@ import (
 	"math"
 	"slices"
 	"testing"
+
+	"github.com/mxwell/qarau/internal/pricing"
 )
 
 func Test_tokenize(t *testing.T) {
@@ -125,7 +127,7 @@ func Test_scoreRecord(t *testing.T) {
 		InputTokens:  3000,
 		OutputTokens: 600,
 	}
-	s := scoreRecord(rec, map[string]Price{"m": {Input: 1, Output: 10}})
+	s := scoreRecord(rec, map[string]pricing.Price{"m": {Input: 1, Output: 10}})
 
 	check := func(key string, want float64) {
 		t.Helper()
