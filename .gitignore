@@ -25,3 +25,5 @@ CLAUDE.md
 *.code-workspace
 TODO.md
 working/
+eval/runs
+eval/view

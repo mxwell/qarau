@@ -34,7 +34,8 @@ VOSK_API_COMMIT     := 72797111dba20cd7e32c4ede867a4b81dccb0708
 	lint-vosk \
 	tidy \
 	eval-run \
-	eval-score
+	eval-score \
+	eval-view
 
 ## tools: install codegen tooling (protoc plugins, sqlc, goose)
 tools:
@@ -142,3 +143,7 @@ eval-run:
 eval-score:
 	go run ./cmd/breakdown-eval score --dir $(EVAL_DIR) \
 		$(if $(BASELINE),--baseline $(BASELINE)) $(if $(EVAL_SET),--set $(EVAL_SET)) $(EVAL_ARGS)
+
+## eval-view: side-by-side HTML of cached eval runs, written to $(EVAL_DIR)/view/<set>.html
+eval-view:
+	go run ./cmd/breakdown-eval view --dir $(EVAL_DIR) $(if $(EVAL_SET),--set $(EVAL_SET)) $(EVAL_ARGS)

@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Breakdown eval {{.Set}}</title>
+<style>
+:root {
+  --bg: #fafaf9;
+  --surface: #ffffff;
+  --text: #1c1917;
+  --muted: #78716c;
+  --border: #e7e5e4;
+  --accent: #2563eb;
+  --bad-bg: #fee2e2;
+  --bad-fg: #991b1b;
+  --warn-bg: #fef3c7;
+  --warn-fg: #92400e;
+  --info-bg: #e0e7ff;
+  --info-fg: #3730a3;
+  --diff: #fff7ed;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1917;
+    --surface: #262321;
+    --text: #e7e5e4;
+    --muted: #a8a29e;
+    --border: #3f3b38;
+    --accent: #60a5fa;
+    --bad-bg: #4c1d1d;
+    --bad-fg: #fecaca;
+    --warn-bg: #45320f;
+    --warn-fg: #fde68a;
+    --info-bg: #262a4d;
+    --info-fg: #c7d2fe;
+    --diff: #2e2620;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  align-items: center;
+}
+header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+header label { display: inline-flex; gap: 6px; align-items: center; }
+select, button {
+  font: inherit;
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 8px;
+}
+button { cursor: pointer; }
+.configs { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.configs label { font-family: var(--mono); font-size: 12px; }
+.summary { padding: 8px 16px; color: var(--muted); }
+.summary a { color: var(--accent); }
+table { border-collapse: collapse; table-layout: fixed; width: 100%; }
+th, td {
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  padding: 8px 10px;
+  vertical-align: top;
+  text-align: left;
+}
+thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  z-index: 1;
+  font-weight: 600;
+}
+th.num, td.num { width: 44px; color: var(--muted); font-variant-numeric: tabular-nums; }
+th.src { width: 240px; }
+.col-name { font-family: var(--mono); font-size: 12px; }
+.col-stats { font-weight: 400; color: var(--muted); font-size: 12px; }
+.col-error { font-weight: 400; color: var(--bad-fg); font-size: 12px; }
+td.src { font-size: 15px; }
+tr.foreign td.src { color: var(--muted); }
+tr.differs td.src { background: var(--diff); }
+.lang { font-size: 11px; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; margin-left: 4px; }
+.badges { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.badge { font-size: 11px; border-radius: 4px; padding: 1px 6px; }
+.badge.bad { background: var(--bad-bg); color: var(--bad-fg); }
+.badge.warn { background: var(--warn-bg); color: var(--warn-fg); }
+.badge.info { background: var(--info-bg); color: var(--info-fg); }
+ol.translations { margin: 0 0 8px; padding-left: 18px; }
+ol.translations li { margin-bottom: 2px; }
+ul.items { list-style: none; margin: 0; padding: 0; }
+ul.items li { padding: 4px 6px; border-left: 3px solid transparent; margin-bottom: 2px; }
+ul.items li.no-comment { border-left-color: var(--bad-fg); }
+ul.items li.no-affix { border-left-color: var(--info-fg); }
+.w { font-weight: 600; }
+.base { font-family: var(--mono); font-size: 12px; }
+.pos { color: var(--muted); font-size: 12px; }
+.tr { font-size: 13px; }
+.comment { font-size: 12px; color: var(--muted); }
+.empty { color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Breakdown eval · {{.Set}}</h1>
+  <label>batch
+    <button id="prev" title="previous batch">‹</button>
+    <select id="batch"></select>
+    <button id="next" title="next batch">›</button>
+  </label>
+  <label>repeat <select id="repeat"></select></label>
+  <label><input type="checkbox" id="only-diff"> only differing splits</label>
+  <label><input type="checkbox" id="only-flagged"> only flagged</label>
+  <div class="configs" id="configs"></div>
+</header>
+<div class="summary" id="summary"></div>
+<table id="grid"></table>
+
+<script type="application/json" id="data">{{.}}</script>
+<script>
+"use strict";
+const data = JSON.parse(document.getElementById("data").textContent);
+const storageKey = "breakdown-eval-view:" + data.set;
+
+const state = {
+  batch: 0,
+  repeat: String(data.repeats[0]),
+  configs: new Set(data.configs),
+  onlyDiff: false,
+  onlyFlagged: false,
+};
+
+try {
+  const saved = JSON.parse(localStorage.getItem(storageKey) || "null");
+  if (saved) {
+    if (saved.batch >= 0 && saved.batch < data.batches.length) state.batch = saved.batch;
+    if (saved.repeat === "all" || data.repeats.includes(Number(saved.repeat))) state.repeat = saved.repeat;
+    if (Array.isArray(saved.configs)) {
+      const known = saved.configs.filter((c) => data.configs.includes(c));
+      if (known.length) state.configs = new Set(known);
+    }
+    state.onlyDiff = !!saved.onlyDiff;
+    state.onlyFlagged = !!saved.onlyFlagged;
+  }
+} catch (e) {}
+
+function save() {
+  try {
+    localStorage.setItem(storageKey, JSON.stringify({ ...state, configs: [...state.configs] }));
+  } catch (e) {}
+}
+
+function el(tag, cls, ...children) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  for (const c of children) {
+    if (c === null || c === undefined || c === "") continue;
+    e.append(c instanceof Node ? c : String(c));
+  }
+  return e;
+}
+
+function norm(s) {
+  return s.toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, "").trim().split(/\s+/).join(" ");
+}
+
+function columns() {
+  const reps = state.repeat === "all" ? data.repeats : [Number(state.repeat)];
+  const cols = [];
+  for (const cfg of data.configs) {
+    if (!state.configs.has(cfg)) continue;
+    for (const r of reps) {
+      const run = ((data.runs[cfg] || {})[state.batch] || {})[r];
+      cols.push({ cfg, r, run });
+    }
+  }
+  return cols;
+}
+
+function sentenceFlags(s) {
+  const c = s.check;
+  if (c.missing) return [{ text: "missing", cls: "bad" }];
+  const flags = [];
+  if (!c.echo_ok) flags.push({ text: "echo ≠", cls: "warn", title: "model wrote: " + s.sentence });
+  if (c.low_gran) flags.push({ text: `items ${c.items}/${c.words} words`, cls: "warn", title: "fewer items than 2/3 of the words" });
+  if (c.few_translations) flags.push({ text: "1 translation", cls: "warn" });
+  if (c.skipped_words) flags.push({ text: "skipped: " + c.skipped_words.join(", "), cls: "bad" });
+  if (c.extra_words) flags.push({ text: "extra: " + c.extra_words.join(", "), cls: "warn" });
+  const items = c.item_checks || [];
+  const noComment = items.filter((i) => i.affixed && !i.has_comment).length;
+  const noAffix = items.filter((i) => i.affixed && i.has_comment && !i.names_affix).length;
+  if (noComment) flags.push({ text: `${noComment} affixed w/o comment`, cls: "bad" });
+  if (noAffix) flags.push({ text: `${noAffix} comment w/o -affix`, cls: "info" });
+  return flags;
+}
+
+function splitKey(s) {
+  if (s.check.missing) return "∅";
+  return (s.breakdown || []).map((b) => norm(b.word)).join("|");
+}
+
+function renderCell(col, i) {
+  const td = el("td");
+  if (!col.run) {
+    td.append(el("span", "empty", "no run"));
+    return td;
+  }
+  if (col.run.error) {
+    td.append(el("span", "empty", "run failed"));
+    return td;
+  }
+  const s = col.run.sentences[i];
+  const flags = sentenceFlags(s);
+  if (flags.length) {
+    const box = el("div", "badges");
+    for (const f of flags) {
+      const b = el("span", "badge " + f.cls, f.text);
+      if (f.title) b.title = f.title;
+      box.append(b);
+    }
+    td.append(box);
+  }
+  if (s.check.missing) return td;
+
+  const tr = el("ol", "translations");
+  for (const t of s.translations || []) tr.append(el("li", null, t));
+  td.append(tr);
+
+  const ul = el("ul", "items");
+  const checks = s.check.item_checks || [];
+  (s.breakdown || []).forEach((b, k) => {
+    const ic = checks[k] || {};
+    let cls = "";
+    if (ic.affixed && !ic.has_comment) cls = "no-comment";
+    else if (ic.affixed && !ic.names_affix) cls = "no-affix";
+    ul.append(el("li", cls,
+      el("div", null, el("span", "w", b.word), " → ", el("span", "base", b.base), " ", el("span", "pos", b.pos)),
+      el("div", "tr", "«" + b.word_translation + "»", b.base_translation ? el("span", "pos", " · " + b.base + ": " + b.base_translation) : null),
+      b.comment ? el("div", "comment", b.comment) : null,
+    ));
+  });
+  td.append(ul);
+  return td;
+}
+
+function render() {
+  save();
+  document.getElementById("batch").value = String(state.batch);
+  document.getElementById("repeat").value = state.repeat;
+  document.getElementById("only-diff").checked = state.onlyDiff;
+  document.getElementById("only-flagged").checked = state.onlyFlagged;
+
+  const batch = data.batches[state.batch];
+  const cols = columns();
+  const grid = document.getElementById("grid");
+  grid.replaceChildren();
+  grid.style.minWidth = 284 + cols.length * 300 + "px";
+
+  const head = el("tr", null, el("th", "num", "#"), el("th", "src", "sentence"));
+  for (const col of cols) {
+    const th = el("th", null, el("div", "col-name", col.cfg + " · r" + col.r));
+    if (col.run) {
+      th.append(el("div", "col-stats",
+        (col.run.latency_ms / 1000).toFixed(0) + "s · " + col.run.input_tokens + " → " + col.run.output_tokens + " tok"));
+      if (col.run.error) th.append(el("div", "col-error", col.run.error));
+    }
+    head.append(th);
+  }
+  grid.append(el("thead", null, head));
+
+  const body = el("tbody");
+  let shown = 0;
+  batch.sentences.forEach((text, i) => {
+    const okCols = cols.filter((c) => c.run && !c.run.error);
+    const differs = new Set(okCols.map((c) => splitKey(c.run.sentences[i]))).size > 1;
+    const flagged = okCols.some((c) => sentenceFlags(c.run.sentences[i]).length > 0);
+    if (state.onlyDiff && !differs) return;
+    if (state.onlyFlagged && !flagged) return;
+    shown++;
+
+    const lang = batch.langs[i];
+    const row = el("tr", [lang !== "kz" ? "foreign" : "", differs ? "differs" : ""].join(" ").trim());
+    row.append(el("td", "num", batch.start_sent_seq + i));
+    row.append(el("td", "src", text, lang !== "kz" ? el("span", "lang", lang) : null));
+    for (const col of cols) row.append(renderCell(col, i));
+    body.append(row);
+  });
+  grid.append(body);
+
+  const summary = document.getElementById("summary");
+  summary.replaceChildren(
+    batch.video_title + " — " + batch.channel_title + " · ",
+    Object.assign(el("a", null, "youtube"), {
+      href: "https://www.youtube.com/watch?v=" + encodeURIComponent(batch.online_video_id),
+      target: "_blank",
+      rel: "noopener",
+    }),
+    ` · showing ${shown} of ${batch.sentences.length} sentences; highlighted rows split differently across columns`,
+  );
+}
+
+function init() {
+  const batchSel = document.getElementById("batch");
+  data.batches.forEach((b, i) => {
+    const o = el("option", null, `b${String(i).padStart(2, "0")} · ${b.video_title}`);
+    o.value = String(i);
+    batchSel.append(o);
+  });
+  batchSel.onchange = () => { state.batch = Number(batchSel.value); render(); };
+  document.getElementById("prev").onclick = () => { state.batch = Math.max(0, state.batch - 1); render(); };
+  document.getElementById("next").onclick = () => { state.batch = Math.min(data.batches.length - 1, state.batch + 1); render(); };
+
+  const repeatSel = document.getElementById("repeat");
+  for (const r of data.repeats) {
+    const o = el("option", null, "r" + r);
+    o.value = String(r);
+    repeatSel.append(o);
+  }
+  const all = el("option", null, "all");
+  all.value = "all";
+  repeatSel.append(all);
+  repeatSel.onchange = () => { state.repeat = repeatSel.value; render(); };
+
+  document.getElementById("only-diff").onchange = (e) => { state.onlyDiff = e.target.checked; render(); };
+  document.getElementById("only-flagged").onchange = (e) => { state.onlyFlagged = e.target.checked; render(); };
+
+  const box = document.getElementById("configs");
+  for (const cfg of data.configs) {
+    const cb = el("input");
+    cb.type = "checkbox";
+    cb.checked = state.configs.has(cfg);
+    cb.onchange = () => {
+      if (cb.checked) state.configs.add(cfg); else state.configs.delete(cfg);
+      render();
+    };
+    box.append(el("label", null, cb, cfg));
+  }
+  render();
+}
+
+init();
+</script>
+</body>
+</html>

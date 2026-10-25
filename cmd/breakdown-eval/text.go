@@ -36,6 +36,17 @@ var russianWords = map[string]bool{
 // "-ты", "«-ға»", but not a hyphen inside a compound word
 var affixRe = regexp.MustCompile(`(?:^|[^\p{L}])-\p{L}+`)
 
+func (l lang) MarshalText() ([]byte, error) {
+	switch l {
+	case langKz:
+		return []byte("kz"), nil
+	case langRu:
+		return []byte("ru"), nil
+	default:
+		return []byte("other"), nil
+	}
+}
+
 func trimToken(s string) string {
 	return strings.TrimFunc(s, func(r rune) bool {
 		return unicode.IsPunct(r) || unicode.IsSymbol(r)
@@ -91,19 +102,36 @@ func classifyLang(tokens []string) lang {
 	return langKz
 }
 
-// length of the longest common subsequence
-func lcs(a, b []string) int {
-	prev := make([]int, len(b)+1)
-	cur := make([]int, len(b)+1)
-	for i := range a {
-		for j := range b {
+// Marks elements of a and b that belong to one longest common subsequence,
+// returns the marks and the subsequence length.
+func lcsAlign(a, b []string) ([]bool, []bool, int) {
+	// dp[i][j] = LCS length of a[i:] and b[j:]
+	dp := make([][]int, len(a)+1)
+	for i := range dp {
+		dp[i] = make([]int, len(b)+1)
+	}
+	for i := len(a) - 1; i >= 0; i-- {
+		for j := len(b) - 1; j >= 0; j-- {
 			if a[i] == b[j] {
-				cur[j+1] = prev[j] + 1
+				dp[i][j] = dp[i+1][j+1] + 1
 			} else {
-				cur[j+1] = max(prev[j+1], cur[j])
+				dp[i][j] = max(dp[i+1][j], dp[i][j+1])
 			}
 		}
-		prev, cur = cur, prev
 	}
-	return prev[len(b)]
+	inA := make([]bool, len(a))
+	inB := make([]bool, len(b))
+	for i, j := 0, 0; i < len(a) && j < len(b); {
+		switch {
+		case a[i] == b[j]:
+			inA[i], inB[j] = true, true
+			i++
+			j++
+		case dp[i+1][j] >= dp[i][j+1]:
+			i++
+		default:
+			j++
+		}
+	}
+	return inA, inB, dp[0][0]
 }

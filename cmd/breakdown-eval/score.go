@@ -99,51 +99,47 @@ func scoreRecord(rec RunRecord, prices map[string]Price) stats {
 
 	third := len(rec.Sentences) / 3
 	for i, input := range rec.Sentences {
-		var out SentenceOutput
-		if i < len(rec.Output) {
-			out = rec.Output[i]
-		}
-		s.add("missing", b2f(out.Sentence == ""), 1)
-		if out.Sentence == "" {
+		c := checkSentence(input, recordOutput(rec, i))
+		s.add("missing", b2f(c.Missing), 1)
+		if c.Missing {
 			continue
 		}
-		s.add("echo_ok", b2f(normalizeText(out.Sentence) == normalizeText(input)), 1)
-
-		inTokens := tokenize(input)
-		if classifyLang(inTokens) != langKz {
+		s.add("echo_ok", b2f(c.EchoOK), 1)
+		if c.Lang != langKz {
 			continue
 		}
-		var outTokens []string
-		for _, item := range out.Breakdown {
-			outTokens = append(outTokens, tokenize(item.Word)...)
-		}
-		matched := float64(lcs(inTokens, outTokens))
-		s.add("coverage", matched, float64(len(inTokens)))
-		s.add("extra", float64(len(outTokens))-matched, float64(len(outTokens)))
+		s.add("coverage", float64(c.Matched), float64(c.Words))
+		s.add("extra", float64(c.OutWords-c.Matched), float64(c.OutWords))
 
-		if len(inTokens) >= 2 {
-			items := float64(len(out.Breakdown))
-			words := float64(len(inTokens))
+		if c.multiWordKz() {
+			items := float64(c.Items)
+			words := float64(c.Words)
 			s.add("granularity", items, words)
-			s.add("low_gran", b2f(3*items < 2*words), 1)
+			s.add("low_gran", b2f(c.LowGran), 1)
 			if i < third {
 				s.add("gran_first", items, words)
 			} else if i >= len(rec.Sentences)-third {
 				s.add("gran_last", items, words)
 			}
-			s.add("two_tr", b2f(len(out.Translations) >= 2), 1)
+			s.add("two_tr", b2f(!c.FewTranslations), 1)
 		}
 
-		for _, item := range out.Breakdown {
-			base := normalizeText(item.Base)
-			if base == "" || base == normalizeText(item.Word) {
+		for _, ic := range c.ItemChecks {
+			if !ic.Affixed {
 				continue
 			}
-			s.add("comment_present", b2f(strings.TrimSpace(item.Comment) != ""), 1)
-			s.add("comment_affix", b2f(affixRe.MatchString(item.Comment)), 1)
+			s.add("comment_present", b2f(ic.HasComment), 1)
+			s.add("comment_affix", b2f(ic.NamesAffix), 1)
 		}
 	}
 	return s
+}
+
+func recordOutput(rec RunRecord, i int) SentenceOutput {
+	if i < len(rec.Output) {
+		return rec.Output[i]
+	}
+	return SentenceOutput{}
 }
 
 type configResult struct {

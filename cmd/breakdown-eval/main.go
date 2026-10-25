@@ -3,13 +3,15 @@
 //
 //	breakdown-eval run   --prompt v2 --model gpt-5.6-luna [--effort low]
 //	breakdown-eval score [--baseline v1@gpt-5.6-luna]
+//	breakdown-eval view  # side-by-side HTML of the cached runs
 //
 // Working directory layout (--dir, "eval" by default):
 //
 //	eval/
 //	├── eval_set.20261006.json                  # copied from the admin endpoint output
 //	├── prices.json                             # optional: {"<model>": {"input": 0.4, "output": 1.6}} per 1M tokens
-//	└── runs/eval_set.20261006/v2@gpt-5.6-luna/b00.r1.json
+//	├── runs/eval_set.20261006/v2@gpt-5.6-luna/b00.r1.json
+//	└── view/eval_set.20261006.html
 package main
 
 import (
@@ -164,7 +166,7 @@ func writeRecord(path string, rec RunRecord) error {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: breakdown-eval run|score [flags]; see -h of each subcommand")
+	fmt.Fprintln(os.Stderr, "usage: breakdown-eval run|score|view [flags]; see -h of each subcommand")
 }
 
 func main() {
@@ -178,6 +180,8 @@ func main() {
 		err = runCmd(os.Args[2:])
 	case "score":
 		err = scoreCmd(os.Args[2:])
+	case "view":
+		err = viewCmd(os.Args[2:])
 	default:
 		usage()
 		os.Exit(2)
