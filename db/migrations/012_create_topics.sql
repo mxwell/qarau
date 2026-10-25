@@ -18,9 +18,13 @@ CREATE INDEX idx_video_topics_topic ON video_topics (topic_id, video_id);
 INSERT INTO topics (slug) VALUES
     ('cars'),
     ('comedy'),
+    ('documentary'),
     ('food'),
     ('history'),
+    ('interview'),
     ('kids'),
+    ('language'),
+    ('movie'),
     ('news'),
     ('podcast'),
     ('science'),
