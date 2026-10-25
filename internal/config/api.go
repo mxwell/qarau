@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mxwell/qarau/internal/pricing"
 	"github.com/spf13/viper"
 )
 
@@ -22,9 +23,9 @@ type APIConfig struct {
 	YTApiKey    string
 	AdminToken  string
 	LlmApiKey   string
+	LlmModel    string
+	LlmPrice    pricing.Price
 	LlmPrompt   uint
-	LlmInPrice  string
-	LlmOutPrice string
 	LlmDaily    string
 	LogDir      string
 	LogLevel    slog.Level
@@ -45,7 +46,8 @@ func LoadAPI() (APIConfig, error) {
 	v.SetDefault("MTLS_KEY", "certs/api.key")
 	v.SetDefault("REST_PORT", 7992)
 	v.SetDefault("GRACE_PERIOD", "3s")
-	v.SetDefault("LLM_PROMPT", 1)
+	v.SetDefault("LLM_MODEL", "gpt-6-luna")
+	v.SetDefault("LLM_PROMPT", 2)
 	v.SetDefault("LLM_DAILY", "0")
 	v.SetDefault("LOG_DIR", "logs")
 	v.SetDefault("LOG_LEVEL", "INFO")
@@ -70,9 +72,8 @@ func LoadAPI() (APIConfig, error) {
 		YTApiKey:    v.GetString("YT_API_KEY"),
 		AdminToken:  v.GetString("ADMIN_TOKEN"),
 		LlmApiKey:   v.GetString("LLM_API_KEY"),
+		LlmModel:    v.GetString("LLM_MODEL"),
 		LlmPrompt:   v.GetUint("LLM_PROMPT"),
-		LlmInPrice:  v.GetString("LLM_INPUT_PRICE"),
-		LlmOutPrice: v.GetString("LLM_OUTPUT_PRICE"),
 		LlmDaily:    v.GetString("LLM_DAILY"),
 		LogDir:      v.GetString("LOG_DIR"),
 		LogLevel:    logLevel,
@@ -100,8 +101,11 @@ func LoadAPI() (APIConfig, error) {
 	if !strings.HasPrefix(cfg.LlmApiKey, "sk-") {
 		return cfg, errors.New("api config error: invalid LLM API key")
 	}
-	if cfg.LlmInPrice == "" || cfg.LlmOutPrice == "" || cfg.LlmDaily == "" {
-		return cfg, fmt.Errorf("api config error: some llm fields are missing: '%s', '%s', '%s'", cfg.LlmInPrice, cfg.LlmOutPrice, cfg.LlmDaily)
+	if cfg.LlmPrice, err = pricing.Lookup(cfg.LlmModel); err != nil {
+		return cfg, fmt.Errorf("api config error: %w", err)
+	}
+	if cfg.LlmDaily == "" {
+		return cfg, errors.New("api config error: missing LLM daily allowance")
 	}
 	if cfg.LogDir == "" {
 		return cfg, fmt.Errorf("api config error: empty log dir")

@@ -153,7 +153,7 @@ func run() error {
 		logger.Error("failed to create YouTube API client", "err", err)
 		return err
 	}
-	llmQuotaCtl, err := quota.NewLlmQuotaController(cfg.LlmInPrice, cfg.LlmOutPrice, cfg.LlmDaily)
+	llmQuotaCtl, err := quota.NewLlmQuotaController(cfg.LlmPrice, cfg.LlmDaily)
 	if err != nil {
 		logger.Error("failed to create LLM quota controller", "err", err)
 		return err
@@ -192,7 +192,7 @@ func run() error {
 		adminHandler.Register(adminRouter)
 	}
 
-	oaiClient, err := llm.New(logger, cfg.LlmApiKey)
+	oaiClient, err := llm.New(logger, cfg.LlmApiKey, cfg.LlmModel)
 	if err != nil {
 		logger.Error("failed to create OpenAI client", "err", err)
 		return err

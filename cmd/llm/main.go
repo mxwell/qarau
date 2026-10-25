@@ -45,7 +45,7 @@ func printStreamedSentence(sent llm.StreamedSentence) {
 
 func run() error {
 	var (
-		promptVersion  = flag.Uint("prompt", 1, "prompt version")
+		promptVersion  = flag.Uint("prompt", 2, "prompt version")
 		targetLang     = flag.String("lang", "", "target language")
 		inputJsonPath  = flag.String("input", "", "input JSON file path")
 		sentenceLimit  = flag.Int("sentences", -1, "how many sentences to use from input")
@@ -99,16 +99,12 @@ func run() error {
 	)
 	logger := slog.New(logHandler)
 
-	client, err := llm.New(logger, cfg.LlmApiKey)
+	client, err := llm.New(logger, cfg.LlmApiKey, cfg.LlmModel)
 	if err != nil {
 		return err
 	}
 
-	llmQuotaCtl, err := quota.NewLlmQuotaController(
-		cfg.LlmInPrice,
-		cfg.LlmOutPrice,
-		"0",
-	)
+	llmQuotaCtl, err := quota.NewLlmQuotaController(cfg.LlmPrice, "0")
 	if err != nil {
 		return err
 	}

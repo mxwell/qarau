@@ -27,11 +27,10 @@ const (
 	placeholderChannelTitle = "{{CHANNEL_TITLE}}"
 	placeholderSubtitles    = "{{SUBTITLES}}"
 
-	LangRu            = "ru"
-	modelForBreakdown = openai.ChatModelGPT5_6Luna
-	maxOutputTokens   = 32768
-	promptAttempts    = 3
-	promptTimeout     = 3 * time.Minute
+	LangRu          = "ru"
+	maxOutputTokens = 32768
+	promptAttempts  = 3
+	promptTimeout   = 3 * time.Minute
 )
 
 type OaiClient struct {
@@ -62,8 +61,8 @@ func generateSchema[T any]() (map[string]any, error) {
 	return result, nil
 }
 
-func New(logger *slog.Logger, apiKey string) (*OaiClient, error) {
-	return NewWithModel(logger, apiKey, modelForBreakdown, "")
+func New(logger *slog.Logger, apiKey string, model string) (*OaiClient, error) {
+	return NewWithModel(logger, apiKey, model, "")
 }
 
 // NewWithModel allows to override the breakdown model, e.g. for evals.

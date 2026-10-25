@@ -6,13 +6,14 @@ import (
 	"os"
 	"strings"
 
+	"github.com/mxwell/qarau/internal/pricing"
 	"github.com/spf13/viper"
 )
 
 type LLMConfig struct {
-	LlmApiKey   string
-	LlmInPrice  string
-	LlmOutPrice string
+	LlmApiKey string
+	LlmModel  string
+	LlmPrice  pricing.Price
 }
 
 func LoadLLM() (LLMConfig, error) {
@@ -22,22 +23,25 @@ func LoadLLM() (LLMConfig, error) {
 	v.SetEnvPrefix("QARAU")
 	v.AutomaticEnv()
 
+	v.SetDefault("LLM_MODEL", "gpt-6-luna")
+
 	if err := v.ReadInConfig(); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return LLMConfig{}, fmt.Errorf("llm config error: %w", err)
 	}
 
 	cfg := LLMConfig{
-		LlmApiKey:   v.GetString("LLM_API_KEY"),
-		LlmInPrice:  v.GetString("LLM_INPUT_PRICE"),
-		LlmOutPrice: v.GetString("LLM_OUTPUT_PRICE"),
+		LlmApiKey: v.GetString("LLM_API_KEY"),
+		LlmModel:  v.GetString("LLM_MODEL"),
 	}
 
 	if !strings.HasPrefix(cfg.LlmApiKey, "sk-") {
 		return cfg, errors.New("llm config error: invalid LLM API key")
 	}
-	if cfg.LlmInPrice == "" || cfg.LlmOutPrice == "" {
-		return cfg, fmt.Errorf("llm config error: some llm fields are missing: '%s', '%s'", cfg.LlmInPrice, cfg.LlmOutPrice)
+	price, err := pricing.Lookup(cfg.LlmModel)
+	if err != nil {
+		return cfg, fmt.Errorf("llm config error: %w", err)
 	}
+	cfg.LlmPrice = price
 
 	return cfg, nil
 }
