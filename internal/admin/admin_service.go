@@ -10,6 +10,7 @@ import (
 	dbgen "github.com/mxwell/qarau/db/gen"
 	"github.com/mxwell/qarau/internal/api"
 	"github.com/mxwell/qarau/internal/constants"
+	"github.com/mxwell/qarau/internal/evalset"
 	"github.com/mxwell/qarau/internal/recommend"
 )
 
@@ -146,20 +147,7 @@ func (s *AdminService) SetVideoTopics(ctx context.Context, onlineVideoID string,
 	return tx.Commit(ctx)
 }
 
-type EvalSetBatch struct {
-	VideoID       int64    `json:"video_id"`
-	OnlineVideoID string   `json:"online_video_id"`
-	VideoTitle    string   `json:"video_title"`
-	ChannelTitle  string   `json:"channel_title"`
-	StartSentSeq  int32    `json:"start_sent_seq"`
-	Sentences     []string `json:"sentences"`
-}
-
-type GenerateEvalSetResponse struct {
-	Batches []EvalSetBatch `json:"batches"`
-}
-
-func (s *AdminService) GenerateEvalSet(ctx context.Context) (GenerateEvalSetResponse, error) {
+func (s *AdminService) GenerateEvalSet(ctx context.Context) (evalset.Set, error) {
 	const (
 		randomSentLimit = 100
 		evalSetBatches  = 5
@@ -176,7 +164,7 @@ func (s *AdminService) GenerateEvalSet(ctx context.Context) (GenerateEvalSetResp
 			"batch", constants.SentenceBatchSize,
 			"err", err,
 		)
-		return GenerateEvalSetResponse{}, err
+		return evalset.Set{}, err
 	}
 	usedTranscriptionIds := make(map[int64]bool)
 
@@ -201,20 +189,20 @@ func (s *AdminService) GenerateEvalSet(ctx context.Context) (GenerateEvalSetResp
 			"keys", len(sampleKeys),
 			"unfiltered", len(randomSentKeys),
 		)
-		return GenerateEvalSetResponse{}, errors.New("not enough data")
+		return evalset.Set{}, errors.New("not enough data")
 	}
 
-	batches := make([]EvalSetBatch, 0, len(sampleKeys))
+	batches := make([]evalset.Batch, 0, len(sampleKeys))
 	for _, row := range sampleKeys {
 		transcriptionID := row.TranscriptionID
 		sents, err := s.queries.GetSentencesRange(ctx, dbgen.GetSentencesRangeParams{
 			TranscriptionID: transcriptionID,
 			StartSeq:        row.Seq,
-			EndSeq:          row.Seq + constants.SentenceBatchSize,
+			EndSeq:          row.Seq + constants.SentenceBatchSize - 1, // inclusive
 		})
 		if err != nil {
 			s.log.Error("failed to load sentences for eval set", "err", err)
-			return GenerateEvalSetResponse{}, fmt.Errorf("failed to load sentences for eval set: %w", err)
+			return evalset.Set{}, fmt.Errorf("failed to load sentences for eval set: %w", err)
 		}
 		sentStrings := make([]string, len(sents))
 		for i := range sents {
@@ -227,9 +215,9 @@ func (s *AdminService) GenerateEvalSet(ctx context.Context) (GenerateEvalSetResp
 				"transcription", transcriptionID,
 				"err", err,
 			)
-			return GenerateEvalSetResponse{}, fmt.Errorf("failed to load video details: %w", err)
+			return evalset.Set{}, fmt.Errorf("failed to load video details: %w", err)
 		}
-		batches = append(batches, EvalSetBatch{
+		batches = append(batches, evalset.Batch{
 			VideoID:       video.ID,
 			OnlineVideoID: video.OnlineVideoID,
 			VideoTitle:    video.Title,
@@ -239,7 +227,7 @@ func (s *AdminService) GenerateEvalSet(ctx context.Context) (GenerateEvalSetResp
 		})
 	}
 
-	return GenerateEvalSetResponse{
+	return evalset.Set{
 		Batches: batches,
 	}, nil
 }

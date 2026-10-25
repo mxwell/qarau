@@ -15,7 +15,26 @@ export CGO_LDFLAGS="-L${PWD}/onnxruntime/lib"
 ONNXRUNTIME_VERSION := 1.27.1
 VOSK_API_COMMIT     := 72797111dba20cd7e32c4ede867a4b81dccb0708
 
-.PHONY: tools deps deps-vosk proto sqlc migrate-up migrate-down build build-vosk run-api run-fetch run-asr test test-vosk lint lint-vosk tidy
+.PHONY: \
+	tools \
+	deps \
+	deps-vosk \
+	proto \
+	sqlc \
+	migrate-up \
+	migrate-down \
+	build \
+	build-vosk \
+	run-api \
+	run-fetch \
+	run-asr \
+	test \
+	test-vosk \
+	lint \
+	lint-vosk \
+	tidy \
+	eval-run \
+	eval-score
 
 ## tools: install codegen tooling (protoc plugins, sqlc, goose)
 tools:
@@ -110,3 +129,16 @@ lint-vosk:
 
 tidy:
 	go mod tidy
+
+EVAL_DIR     ?= eval
+EVAL_REPEATS ?= 3
+
+## eval-run: breakdown eval for one config, e.g. make eval-run PROMPT=v2 MODEL=gpt-5.6-luna [EFFORT=low] [EVAL_SET=eval_set.20261006.json] [EVAL_ARGS="--batches 1"]
+eval-run:
+	go run ./cmd/breakdown-eval run --dir $(EVAL_DIR) --prompt $(PROMPT) --model $(MODEL) --repeats $(EVAL_REPEATS) \
+		$(if $(EFFORT),--effort $(EFFORT)) $(if $(EVAL_SET),--set $(EVAL_SET)) $(EVAL_ARGS)
+
+## eval-score: score cached eval runs, e.g. make eval-score BASELINE=v1@gpt-5.6-luna
+eval-score:
+	go run ./cmd/breakdown-eval score --dir $(EVAL_DIR) \
+		$(if $(BASELINE),--baseline $(BASELINE)) $(if $(EVAL_SET),--set $(EVAL_SET)) $(EVAL_ARGS)

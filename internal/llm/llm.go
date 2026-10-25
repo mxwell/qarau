@@ -19,6 +19,7 @@ import (
 	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/packages/param"
 	"github.com/openai/openai-go/v3/responses"
+	"github.com/openai/openai-go/v3/shared"
 )
 
 const (
@@ -37,6 +38,9 @@ type OaiClient struct {
 	logger     *slog.Logger
 	client     openai.Client
 	schemaRuV1 map[string]any
+	model      string
+	// empty means the model's default
+	reasoningEffort string
 }
 
 func generateSchema[T any]() (map[string]any, error) {
@@ -59,17 +63,28 @@ func generateSchema[T any]() (map[string]any, error) {
 }
 
 func New(logger *slog.Logger, apiKey string) (*OaiClient, error) {
+	return NewWithModel(logger, apiKey, modelForBreakdown, "")
+}
+
+// NewWithModel allows to override the breakdown model, e.g. for evals.
+// Empty reasoningEffort leaves the model's default.
+func NewWithModel(logger *slog.Logger, apiKey string, model string, reasoningEffort string) (*OaiClient, error) {
 	if apiKey == "" {
 		return nil, errors.New("empty apiKey in OaiClient creation")
+	}
+	if model == "" {
+		return nil, errors.New("empty model in OaiClient creation")
 	}
 	schemaRuV1, err := generateSchema[ResponseRuV1]()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate schema for OaiClient: %w", err)
 	}
 	return &OaiClient{
-		logger:     logger,
-		client:     openai.NewClient(option.WithAPIKey(apiKey)),
-		schemaRuV1: schemaRuV1,
+		logger:          logger,
+		client:          openai.NewClient(option.WithAPIKey(apiKey)),
+		schemaRuV1:      schemaRuV1,
+		model:           model,
+		reasoningEffort: reasoningEffort,
 	}, nil
 }
 
@@ -303,9 +318,15 @@ func (c OaiClient) buildBreakdownBodyRuV1(
 		return body, BreakdownMetadata{}, errors.New("empty prompt")
 	}
 
-	model := modelForBreakdown
+	model := c.model
 
-	c.logger.Info("prompt to llm for ru breakdown", "model", model, "prompt_size", len(prompt), "sents", len(sentences))
+	c.logger.Info(
+		"prompt to llm for ru breakdown",
+		"model", model,
+		"effort", c.reasoningEffort,
+		"prompt_size", len(prompt),
+		"sents", len(sentences),
+	)
 
 	format := responses.ResponseFormatTextConfigParamOfJSONSchema(
 		"schema_ru_v1",
@@ -313,7 +334,7 @@ func (c OaiClient) buildBreakdownBodyRuV1(
 	)
 	format.OfJSONSchema.Strict = param.NewOpt(true)
 
-	return responses.ResponseNewParams{
+	body = responses.ResponseNewParams{
 		Model:           model,
 		MaxOutputTokens: param.NewOpt[int64](maxOutputTokens),
 		Input: responses.ResponseNewParamsInputUnion{
@@ -322,7 +343,13 @@ func (c OaiClient) buildBreakdownBodyRuV1(
 		Text: responses.ResponseTextConfigParam{
 			Format: format,
 		},
-	}, BreakdownMetadata{
+	}
+	if c.reasoningEffort != "" {
+		body.Reasoning = shared.ReasoningParam{
+			Effort: shared.ReasoningEffort(c.reasoningEffort),
+		}
+	}
+	return body, BreakdownMetadata{
 		Model:         model,
 		PromptVersion: promptVersion,
 	}, nil

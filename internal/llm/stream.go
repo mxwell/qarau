@@ -283,7 +283,7 @@ func (c OaiClient) DoSentenceBreakdownStream(
 
 	return SentenceBreakdownResult{
 		Metadata: BreakdownMetadata{
-			Model:         modelForBreakdown,
+			Model:         c.model,
 			PromptVersion: promptVersion,
 		},
 		Usage:     usage,
