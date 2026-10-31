@@ -87,13 +87,13 @@ func (s *AdminService) SetVideoTopics(ctx context.Context, onlineVideoID string,
 	}
 	topicRows, err := recommend.SlugsToTopics(available, topics)
 	if err != nil {
-		s.log.Error("failed to convert topics", "err", err)
+		s.log.Warn("failed to convert topics", "err", err)
 		return fmt.Errorf("topic conversion fail: %w", err)
 	}
 
 	videoID, err := s.queries.GetVideoID(ctx, onlineVideoID)
 	if err != nil {
-		s.log.Error("failed to find video ID", "onlineVideoID", onlineVideoID, "err", err)
+		s.log.Warn("failed to find video ID", "onlineVideoID", onlineVideoID, "err", err)
 		return fmt.Errorf("failed to find video ID: %w", err)
 	}
 
