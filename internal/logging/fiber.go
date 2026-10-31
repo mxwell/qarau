@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"errors"
 	"log/slog"
 	"time"
 
@@ -8,13 +9,20 @@ import (
 )
 
 // FiberRequestLogger returns a middleware that emits one structured log line
-// per HTTP request. Level is info for <400, warn for 4xx, error for 5xx or
-// when the handler returned an error.
+// per HTTP request. Level is info for <400, warn for 4xx, error for 5xx.
 func FiberRequestLogger(log *slog.Logger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		start := time.Now()
 		err := c.Next()
 		status := c.Response().StatusCode()
+		if err != nil {
+			// fiber's ErrorHandler runs after the middleware chain, so the
+			// response status doesn't reflect err yet.
+			status = fiber.StatusInternalServerError
+			if fe, ok := errors.AsType[*fiber.Error](err); ok {
+				status = fe.Code
+			}
+		}
 
 		attrs := []any{
 			"method", c.Method(),
@@ -29,7 +37,7 @@ func FiberRequestLogger(log *slog.Logger) fiber.Handler {
 		}
 
 		switch {
-		case err != nil || status >= 500:
+		case status >= 500:
 			log.Error("request", attrs...)
 		case status >= 400:
 			log.Warn("request", attrs...)
