@@ -86,6 +86,8 @@ Fetch worker has an alternative approach using JS runtime, see https://github.co
 
 One needs to set `JS_RUNTIME_NAME` and `JS_RUNTIME_PATH` to enable it.
 
+Installing on a Raspberry Pi as a systemd service: see [deploy/fetch/README.md](deploy/fetch/README.md).
+
 ## mTLS: generating the CA and certs
 
 Worker↔`api` gRPC traffic might need to be authenticated with mutual TLS instead of a shared token: each worker
