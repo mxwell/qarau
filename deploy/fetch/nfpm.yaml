@@ -1,0 +1,46 @@
+name: qarau-fetch
+arch: arm64
+platform: linux
+version: ${VERSION}
+version_schema: none
+section: net
+priority: optional
+maintainer: Kazakh Verb <kazakhverb@khairulin.com>
+description: qarau fetch worker - downloads audio for transcription jobs
+homepage: https://github.com/mxwell/qarau
+license: MIT
+
+depends:
+  - adduser
+
+contents:
+  - src: bin/linux_arm64/fetch
+    dst: /usr/bin/qarau-fetch
+    file_info:
+      mode: 0755
+
+  - src: deploy/fetch/qarau-fetch.service
+    dst: /lib/systemd/system/qarau-fetch.service
+    file_info:
+      mode: 0644
+
+  - src: deploy/fetch/fetch.env
+    dst: /etc/qarau-fetch/fetch.env
+    type: config|noreplace
+    file_info:
+      mode: 0640
+
+  - src: LICENSE
+    dst: /usr/share/doc/qarau-fetch/copyright
+    file_info:
+      mode: 0644
+
+  - dst: /etc/qarau-fetch/certs
+    type: dir
+    file_info:
+      mode: 0750
+
+scripts:
+  postinstall: deploy/fetch/scripts/postinst.sh
+  preremove: deploy/fetch/scripts/prerm.sh
+  postremove: deploy/fetch/scripts/postrm.sh

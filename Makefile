@@ -25,6 +25,7 @@ VOSK_API_COMMIT     := 72797111dba20cd7e32c4ede867a4b81dccb0708
 	migrate-down \
 	build \
 	build-vosk \
+	deb-fetch \
 	run-api \
 	run-fetch \
 	run-asr \
@@ -43,6 +44,7 @@ tools:
 	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 	go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
 	go install github.com/pressly/goose/v3/cmd/goose@latest
+	go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
 
 ## deps: fetch onnxruntime, the native lib needed for VAD/LangID
 deps:
@@ -98,6 +100,13 @@ build-vosk:
 
 fetch_build_arm:
 	GOOS=linux GOARCH=arm64 go build -o bin/ ./cmd/fetch
+
+DEB_VERSION ?= 0.0.$(shell git rev-list --count HEAD)+g$(shell git rev-parse --short HEAD)
+
+## deb-fetch: build bin/qarau-fetch.deb (arm64, systemd service) for Debian 12 on Raspberry Pi
+deb-fetch:
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o bin/linux_arm64/fetch ./cmd/fetch
+	VERSION=$(DEB_VERSION) nfpm package --config deploy/fetch/nfpm.yaml --packager deb --target bin/qarau-fetch.deb
 
 run_pg_dev:
 	docker run --rm --name postgres_dev -e POSTGRES_PASSWORD=admin -e POSTGRES_DB=qaraudb -p 5432:5432 -v postgres-data:/var/lib/postgresql -d pg_kazsearch

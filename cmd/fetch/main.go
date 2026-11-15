@@ -107,7 +107,7 @@ func run() error {
 		return err
 	}
 
-	if err := worker.Loop(ctx); err != nil {
+	if err := worker.Loop(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		logger.Error("worker loop failed", "err", err)
 		return err
 	}
